@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+.python-version
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Caches / build artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+*.egg-info/
+
+# Local logs / outputs
+*.log
+transcripts/
+outputs/
+
+# Model files (keep weights out of git if they ever land here)
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.gguf
+
+# Ignore the models directory by default if it exists, as it may contain secrets
+models/**
+# But allow safe, curated content in the models directory
+!models/**/
+!models/**/README.md
+!models/**/notes/**
+!models/**/config/**
+!models/**/templates/**
+# Never commit prompts (may contain secrets)
+models/**/prompts/**
+!models/**/prompts/README.md
+
+
