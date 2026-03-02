@@ -39,6 +39,12 @@ pip install llama-cpp-python
   - Default `--max-new-tokens` is `2048`.
   - Supports `-8bit` / `-4bit` (CUDA only).
 
+- `tui_chat.py`
+  - Textual TUI for HF chat.
+  - Bottom grey input band with scrollable transcript above.
+  - Collapsible streaming thinking section per assistant turn.
+  - Hides `<think>` markers while routing inner content to a grey “thinking” panel.
+
 - `alex.py`
   - GGUF chat runner via `llama-cpp-python`.
   - Accepts Windows or WSL paths.
@@ -72,6 +78,7 @@ Config-driven run (recommended):
 python chat.py --config Nanbeige4.1-3B
 python chat.py --config models/Nanbeige4.1-3B/hf/config --max-new-tokens 1024
 python chat.py --config Nanbeige4.1-3B --stream
+python tui_chat.py --config Nanbeige4.1-3B
 python runner.py --config Nanbeige4.1-3B
 ```
 

@@ -5,7 +5,7 @@
   "use_4bit": false,
   "stream": true,
   "chat_template": "search",
-  "system": "You are a concise, accurate assistant. Prefer direct final answers.",
+  "system": null,
   "system_file": "models/Nanbeige4.1-3B/hf/prompts/system.txt",
   "user_prefix": "",
   "prompt_prefix": "",
