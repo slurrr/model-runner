@@ -1,0 +1,31 @@
+# Useful CLI Commands
+# nvidia-smi with GPU utilization, memory usage, temperature, and power draw, updated every 0.5 seconds, formatted in a readable table
+nvidia-smi --query-gpu=index,name,utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu,power.draw
+--format=csv,noheader,nounits -l 0.5 \
+| awk -F',' 'BEGIN{printf "%-3s %-24s %7s %7s %12s %8s %8s\n","GPU","Name","GPU%","MEM%","Mem(used/tot)","TempC","PowerW"; print
+"------------------------------------------------------------------------------------------------"} {gsub(/^ +| +$/,"",$1); gsub(/^ +| +$/,"",
+$2); gsub(/^ +| +$/,"",$3); gsub(/^ +| +$/,"",$4); gsub(/^ +| +$/,"",$5); gsub(/^ +| +$/,"",$6); gsub(/^ +| +$/,"",$7); gsub(/^ +| +$/,"",$8);
+printf "%-3s %-24s %7s %7s %6s/%-5s %8s %8s\n",$1,$2,$3,$4,$5,$6,$7,$8 }'
+
+
+# To add a new model, copy the _TEMPLATE folder and fill in the relevant config and notes files. For example:
+MODEL="MyModel"
+cp -a models/_TEMPLATE "models/$MODEL"
+
+Then fill in what matters:
+
+- HF: models/$MODEL/hf/config/config.json + models/$MODEL/hf/notes/README.md
+- GGUF: models/$MODEL/gguf/notes/README.md (and add config/config.json when you’re ready)
+- Ollama: models/$MODEL/ollama/config/config.json + models/$MODEL/ollama/notes/README.md
+
+For an Ollama-tagged name like foo:latest, use a folder-safe name and store the real Ollama name in config:
+
+MODEL="foo__latest"
+cp -a models/_TEMPLATE "models/$MODEL"
+# then set: models/$MODEL/ollama/config/config.json -> "model": "foo:latest"
+
+# e.g. for Ollama, add the model like this:
+cp -a models/_TEMPLATE "models/ds32b-alex"
+
+# set experimental config values as default
+cp models/Nanbeige4.1-3B/hf/config/agent_en_fast.json models/Nanbeige4.1-3B/hf/config/config.json

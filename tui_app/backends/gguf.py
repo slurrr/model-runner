@@ -40,7 +40,7 @@ class GGUFSession:
     def generate_turn(self, turn_id: int, messages: list[dict[str, str]], emit: EventEmitter) -> None:
         emit(TurnStart(turn_id=turn_id))
         started = time.time()
-        router = ThinkRouter()
+        router = ThinkRouter(assume_think=self.args.assume_think)
 
         raw_parts: list[str] = []
         think_parts: list[str] = []

@@ -16,6 +16,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Optional (recommended): install a console entrypoint for the unified TUI:
+```bash
+pip install -e .
+```
+
 Optional GGUF support:
 
 ```bash
@@ -64,6 +69,13 @@ pip install llama-cpp-python
 
 ### 3) Common Commands
 
+Unified TUI (recommended):
+```bash
+tui Nanbeige4.1-3B
+tui /mnt/d/models/your-model.gguf
+tui ollama:your-ollama-model
+```
+
 Hugging Face text run:
 
 ```bash
@@ -86,6 +98,8 @@ Config-driven run (recommended):
 python chat.py --config Nanbeige4.1-3B
 python chat.py --config models/Nanbeige4.1-3B/hf/config --max-new-tokens 1024
 python chat.py --config Nanbeige4.1-3B --stream
+python -m pip install -e .
+tui Nanbeige4.1-3B
 python tui.py Nanbeige4.1-3B
 python tui.py /mnt/d/models/your-model.gguf
 python tui.py /mnt/d/models/your-model.gguf --assume-think

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 
 class ThinkRouter:
-    def __init__(self):
+    def __init__(self, assume_think: bool = False):
+        self.assume_think = bool(assume_think)
         self.start_markers = [
             "<think>",
             "<|begin_of_thought|>",
@@ -15,10 +16,15 @@ class ThinkRouter:
             "<｜end_of_thought｜>",
             "<｜end▁of▁thought｜>",
         ]
-        self.mode = "answer"
-        self.buffer = ""
         all_markers = self.start_markers + self.end_markers
         self.max_marker_len = max(len(m) for m in all_markers)
+        self.mode = "answer"
+        self.buffer = ""
+        self.reset_turn()
+
+    def reset_turn(self) -> None:
+        self.mode = "think" if self.assume_think else "answer"
+        self.buffer = ""
 
     @staticmethod
     def _find_first(text: str, markers: list[str]) -> tuple[int, str]:
@@ -53,8 +59,9 @@ class ThinkRouter:
                 self.buffer = self.buffer[idx + len(marker) :]
                 self.mode = "think"
             else:
-                idx, marker = self._find_first(self.buffer, self.end_markers)
-                if idx == -1:
+                idx_end, marker_end = self._find_first(self.buffer, self.end_markers)
+                idx_start, marker_start = self._find_first(self.buffer, self.start_markers)
+                if idx_end == -1 and idx_start == -1:
                     keep = self.max_marker_len
                     if len(self.buffer) > keep:
                         emit = self.buffer[:-keep]
@@ -63,10 +70,18 @@ class ThinkRouter:
                         self.buffer = self.buffer[-keep:]
                     break
 
-                before = self.buffer[:idx]
+                if idx_start != -1 and (idx_end == -1 or idx_start < idx_end):
+                    before = self.buffer[:idx_start]
+                    if before:
+                        events.append(("think", before))
+                    # Drop duplicated/opening think marker while already in think mode.
+                    self.buffer = self.buffer[idx_start + len(marker_start) :]
+                    continue
+
+                before = self.buffer[:idx_end]
                 if before:
                     events.append(("think", before))
-                self.buffer = self.buffer[idx + len(marker) :]
+                self.buffer = self.buffer[idx_end + len(marker_end) :]
                 self.mode = "answer"
 
         return events

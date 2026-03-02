@@ -27,6 +27,7 @@
   "show_thinking": false,
   "no_animate_thinking": false,
   "save_transcript": "",
+  "assume_think": false,
   "scroll_lines": 1,
   "ui_tick_ms": 33,
   "ui_max_events_per_tick": 120

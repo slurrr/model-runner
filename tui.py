@@ -31,7 +31,7 @@ def detect_backend(model: str | None, backend_override: str | None) -> str:
     normalized = normalize_windows_path(model)
     if normalized.startswith("ollama:"):
         return "ollama"
-    if normalized.lower().endswith(".gguf") and os.path.exists(normalized):
+    if normalized.lower().endswith(".gguf"):
         return "gguf"
     if os.path.isdir(normalized):
         return "hf"
@@ -95,6 +95,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--show-thinking", action="store_true")
     parser.add_argument("--no-animate-thinking", action="store_true")
     parser.add_argument("--save-transcript", default="")
+    think_mode_group = parser.add_mutually_exclusive_group()
+    think_mode_group.add_argument("--assume-think", dest="assume_think", action="store_true")
+    think_mode_group.add_argument("--no-assume-think", dest="assume_think", action="store_false")
 
     parser.add_argument("--scroll-lines", type=int, default=1)
     parser.add_argument("--ui-tick-ms", type=int, default=33)
@@ -120,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ollama-timeout", type=int, default=600)
     parser.add_argument("--ollama-think", choices=["auto", "true", "false"], default="auto")
 
-    parser.set_defaults(stream=True)
+    parser.set_defaults(stream=True, assume_think=None)
     return parser
 
 
@@ -141,6 +144,7 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "show_thinking",
         "no_animate_thinking",
         "save_transcript",
+        "assume_think",
         "scroll_lines",
         "ui_tick_ms",
         "ui_max_events_per_tick",
@@ -163,6 +167,35 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "ollama_think",
     }
     return {k: v for k, v in config_data.items() if k in supported}
+
+
+def _detect_cli_overrides(argv: list[str]) -> set[str]:
+    option_to_dest = {
+        "--max-new-tokens": "max_new_tokens",
+        "--temperature": "temperature",
+        "--top-p": "top_p",
+        "--top-k": "top_k",
+        "--stop-strings": "stop_strings",
+        "--system": "system",
+        "--system-file": "system_file",
+        "--user-prefix": "user_prefix",
+        "--assume-think": "assume_think",
+        "--no-assume-think": "assume_think",
+        "--ollama-host": "ollama_host",
+        "--ollama-timeout": "ollama_timeout",
+        "--ollama-think": "ollama_think",
+    }
+    seen: set[str] = set()
+    for token in argv:
+        if token == "--":
+            break
+        if not token.startswith("--"):
+            continue
+        key = token.split("=", 1)[0]
+        dest = option_to_dest.get(key)
+        if dest:
+            seen.add(dest)
+    return seen
 
 
 def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespace, backend: str):
@@ -201,6 +234,7 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
         "show_thinking",
         "no_animate_thinking",
         "save_transcript",
+        "assume_think",
         "scroll_lines",
         "ui_tick_ms",
         "ui_max_events_per_tick",
@@ -226,6 +260,9 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
 
 
 def parse_args() -> argparse.Namespace:
+    raw_argv = sys.argv[1:]
+    cli_overrides = _detect_cli_overrides(raw_argv)
+
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("model_id", nargs="?")
     pre.add_argument("--backend", choices=["hf", "gguf", "ollama"], default=None)
@@ -250,6 +287,8 @@ def parse_args() -> argparse.Namespace:
         parser.set_defaults(**defaults)
 
     args = parser.parse_args()
+    args._cli_overrides = cli_overrides
+    args._config_keys = set(defaults.keys())
     if not args.model_id:
         args.model_id = defaults.get("model_id")
     if not args.model_id:
@@ -257,6 +296,8 @@ def parse_args() -> argparse.Namespace:
 
     args.backend = detect_backend(args.model_id, args.backend)
     args._config_path = config_path
+    if args.assume_think is None:
+        args.assume_think = False
 
     if not args.system and args.system_file:
         try:

@@ -230,7 +230,8 @@ class TranscriptPane(VerticalScroll):
 
     def action_scroll_end(self):
         result = super().action_scroll_end()
-        self._resume_follow(immediate=True)
+        # Keep End-key scroll behavior animated by not forcing an immediate non-animated scroll_end.
+        self._resume_follow(immediate=False)
         return result
 
     def on_mouse_scroll_up(self, event: MouseScrollUp):

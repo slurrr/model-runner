@@ -1,0 +1,161 @@
+#!/usr/bin/env python3
+import argparse
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+MODELS_DIR = REPO_ROOT / "models"
+TEMPLATE_DIR = MODELS_DIR / "_TEMPLATE"
+
+
+def _copy_tree(src: Path, dst: Path, *, overwrite: bool) -> list[Path]:
+    copied: list[Path] = []
+    for root, _dirs, files in os.walk(src):
+        root_path = Path(root)
+        rel = root_path.relative_to(src)
+        (dst / rel).mkdir(parents=True, exist_ok=True)
+        for name in files:
+            if name == ".gitkeep":
+                continue
+            src_file = root_path / name
+            dst_file = dst / rel / name
+            if dst_file.exists() and not overwrite:
+                continue
+            dst_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src_file, dst_file)
+            copied.append(dst_file)
+    return copied
+
+
+def _ensure_file(path: Path, content: str, *, overwrite: bool) -> bool:
+    if path.exists() and not overwrite:
+        return False
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    return True
+
+
+def _try_update_json(path: Path, updates: dict) -> bool:
+    if not path.exists():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    if not isinstance(data, dict):
+        return False
+    changed = False
+    for key, value in updates.items():
+        if value is None:
+            continue
+        if data.get(key) != value:
+            data[key] = value
+            changed = True
+    if changed:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return changed
+
+
+def cmd_add(args: argparse.Namespace) -> int:
+    model_name = args.model_name.strip().rstrip("/").rstrip("\\")
+    if not model_name:
+        print("model_name is required")
+        return 2
+
+    backend = args.backend
+    template_backend_dir = TEMPLATE_DIR / backend
+    if not template_backend_dir.is_dir():
+        print(f"Template backend directory missing: {template_backend_dir}")
+        return 2
+
+    model_dir = MODELS_DIR / model_name
+    backend_dir = model_dir / backend
+
+    backend_dir.mkdir(parents=True, exist_ok=True)
+    copied = _copy_tree(template_backend_dir, backend_dir, overwrite=args.force)
+
+    # Ensure standard subfolders exist even if templates are empty.
+    (backend_dir / "notes").mkdir(parents=True, exist_ok=True)
+    (backend_dir / "config").mkdir(parents=True, exist_ok=True)
+    (backend_dir / "templates").mkdir(parents=True, exist_ok=True)
+    (backend_dir / "prompts").mkdir(parents=True, exist_ok=True)
+
+    # Provide repo-tracked READMEs for prompts/templates to keep navigation consistent.
+    prompts_readme = backend_dir / "prompts" / "README.md"
+    templates_readme = backend_dir / "templates" / "README.md"
+    _ensure_file(
+        prompts_readme,
+        f"# {model_name} prompts ({backend})\n\n"
+        "This folder is for prompt assets (system prompts, few-shots, tool schemas).\n"
+        "It may be git-ignored except for this README.\n",
+        overwrite=False,
+    )
+    _ensure_file(
+        templates_readme,
+        f"# {model_name} templates ({backend})\n\n"
+        "This folder is for prompt/template overrides or experiments.\n",
+        overwrite=False,
+    )
+
+    # Light config population (optional; safe defaults).
+    if backend == "ollama":
+        cfg = backend_dir / "config" / "config.json"
+        _try_update_json(cfg, {"model": args.backend_id})
+    elif backend == "hf":
+        cfg = backend_dir / "config" / "config.json"
+        _try_update_json(cfg, {"model_id": args.backend_id})
+
+    print(f"Model: {model_name}")
+    print(f"Backend added: {backend}")
+    if copied:
+        print(f"Copied {len(copied)} file(s) from templates.")
+    else:
+        print("No template files copied (already present).")
+
+    print(f"Path: {backend_dir}")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Manage model folders under ./models/")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    add = sub.add_parser("add", help="Add a backend scaffold for a model")
+    add.add_argument("model_name", help="Folder name under models/ (e.g. ds32b-alex)")
+    add.add_argument("backend", choices=["hf", "gguf", "ollama"], help="Backend to add")
+    add.add_argument(
+        "--id",
+        dest="backend_id",
+        default=None,
+        help="Backend model identifier to prefill into config (HF: model_id, Ollama: model).",
+    )
+    add.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing template files when copying.",
+    )
+    add.set_defaults(func=cmd_add)
+
+    return parser
+
+
+def main() -> int:
+    if not MODELS_DIR.is_dir():
+        print(f"models/ directory not found at: {MODELS_DIR}")
+        return 2
+    if not TEMPLATE_DIR.is_dir():
+        print(f"models/_TEMPLATE directory not found at: {TEMPLATE_DIR}")
+        return 2
+
+    parser = build_parser()
+    args = parser.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
