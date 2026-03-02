@@ -147,6 +147,18 @@ Use Textual `Input` at bottom in a `Container` styled with:
 - grey background across full width
 - white cursor / input text (or slightly brighter grey)
 
+### Transcript follow behavior (deterministic contract)
+- Follow mode is **intent-driven** (single authority).
+- Break follow on explicit upward navigation intent:
+  - mouse wheel up
+  - `PageUp`
+  - `Home`
+  - line-up scroll actions
+- Resume follow on explicit resume intent:
+  - `End` (must jump to bottom and enable follow)
+  - downward navigation that reaches bottom
+- Avoid passive follow toggling based on inferred `scroll_y` deltas; this causes competing state transitions.
+
 ## Concurrency / generation
 
 ### Approach
@@ -180,4 +192,3 @@ Keep it close to `chat.py`:
 - Prefer to always supply an explicit system message in the prompt to avoid the template’s default Chinese system injection.
 - Expect long `<think>` spans; the UI should remain responsive even if no answer text is produced.
 - Hiding markers but showing inner tokens is the right default for this model.
-

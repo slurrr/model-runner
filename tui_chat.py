@@ -12,6 +12,7 @@ import torch
 from config_utils import load_json_config
 from rich.text import Text
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Container, VerticalScroll
 from textual.events import MouseScrollDown, MouseScrollUp
 from textual.reactive import reactive
@@ -524,6 +525,56 @@ class AssistantMessage(Container):
         self.thinking_panel.toggle()
 
 
+class TranscriptPane(VerticalScroll):
+    def _at_bottom(self, eps: float = 0.1) -> bool:
+        return float(self.scroll_y) >= float(self.max_scroll_y) - eps
+
+    def _break_follow(self):
+        if hasattr(self.app, "_break_follow"):
+            self.app._break_follow()
+
+    def _resume_follow(self, immediate: bool = False):
+        if hasattr(self.app, "_resume_follow"):
+            self.app._resume_follow(immediate=immediate)
+
+    def action_scroll_up(self):
+        self._break_follow()
+        return super().action_scroll_up()
+
+    def action_page_up(self):
+        self._break_follow()
+        return super().action_page_up()
+
+    def action_scroll_home(self):
+        self._break_follow()
+        return super().action_scroll_home()
+
+    def action_scroll_down(self):
+        result = super().action_scroll_down()
+        if self._at_bottom():
+            self._resume_follow()
+        return result
+
+    def action_page_down(self):
+        result = super().action_page_down()
+        if self._at_bottom():
+            self._resume_follow()
+        return result
+
+    def action_scroll_end(self):
+        result = super().action_scroll_end()
+        self._resume_follow(immediate=True)
+        return result
+
+    def on_mouse_scroll_up(self, event: MouseScrollUp):
+        self.action_scroll_up()
+        event.stop()
+
+    def on_mouse_scroll_down(self, event: MouseScrollDown):
+        self.action_scroll_down()
+        event.stop()
+
+
 @dataclass
 class TuiRuntime:
     model: AutoModelForCausalLM
@@ -602,11 +653,11 @@ class TuiChatApp(App):
     """
 
     BINDINGS = [
-        ("t", "toggle_latest_thinking", "Toggle thinking"),
-        ("pageup", "scroll_page_up", "Scroll up"),
-        ("pagedown", "scroll_page_down", "Scroll down"),
-        ("home", "scroll_home", "Scroll top"),
-        ("end", "scroll_end_manual", "Scroll bottom"),
+        Binding("t", "toggle_latest_thinking", "Toggle thinking"),
+        Binding("pageup", "scroll_page_up", "Scroll up", priority=True),
+        Binding("pagedown", "scroll_page_down", "Scroll down", priority=True),
+        Binding("home", "scroll_home", "Scroll top", priority=True),
+        Binding("end", "scroll_end_manual", "Scroll bottom", priority=True),
     ]
 
     def __init__(self, runtime: TuiRuntime):
@@ -624,10 +675,9 @@ class TuiChatApp(App):
         self.follow_output = True
         self._scroll_end_scheduled = False
         self._max_events_per_tick = 240
-        self._last_scroll_y = 0.0
 
     def compose(self) -> ComposeResult:
-        self.transcript = VerticalScroll(id="transcript")
+        self.transcript = TranscriptPane(id="transcript")
         yield self.transcript
         with Container(id="input-band"):
             yield Input(placeholder="Type message and press Enter", id="chat-input")
@@ -646,47 +696,26 @@ class TuiChatApp(App):
         # Cancel pending auto-follow callbacks requested before user broke follow.
         self._scroll_end_scheduled = False
 
-    def _at_bottom(self, eps: float = 0.1) -> bool:
-        return float(self.transcript.scroll_y) >= float(self.transcript.max_scroll_y) - eps
-
-    def _resume_follow(self):
+    def _resume_follow(self, immediate: bool = False):
         self.follow_output = True
+        if immediate:
+            self._scroll_end_scheduled = False
+            self.transcript.refresh(layout=True)
+            self.transcript.scroll_end(animate=False)
+            return
         self._request_scroll_end()
 
     def action_scroll_page_up(self):
-        self._break_follow()
-        step = max(3, self.size.height - 6)
-        self.transcript.scroll_to(y=max(0, self.transcript.scroll_y - step), animate=False)
+        self.transcript.action_page_up()
 
     def action_scroll_page_down(self):
-        step = max(3, self.size.height - 6)
-        target = min(self.transcript.max_scroll_y, self.transcript.scroll_y + step)
-        self.transcript.scroll_to(y=target, animate=False)
-        if self._at_bottom():
-            self._resume_follow()
+        self.transcript.action_page_down()
 
     def action_scroll_home(self):
-        self._break_follow()
-        self.transcript.scroll_to(y=0, animate=False)
+        self.transcript.action_scroll_home()
 
     def action_scroll_end_manual(self):
-        self.follow_output = True
-        self._scroll_end_scheduled = False
-        self.transcript.refresh(layout=True)
-        self.transcript.scroll_end(animate=False)
-        self._last_scroll_y = float(self.transcript.scroll_y)
-
-    def on_mouse_scroll_up(self, event: MouseScrollUp):
-        self._break_follow()
-        self.transcript.scroll_to(y=max(0, self.transcript.scroll_y - 3), animate=False)
-        event.stop()
-
-    def on_mouse_scroll_down(self, event: MouseScrollDown):
-        target = min(self.transcript.max_scroll_y, self.transcript.scroll_y + 3)
-        self.transcript.scroll_to(y=target, animate=False)
-        if self._at_bottom():
-            self._resume_follow()
-        event.stop()
+        self.transcript.action_scroll_end()
 
     def _scroll_to_end_now(self):
         self._scroll_end_scheduled = False
@@ -694,7 +723,6 @@ class TuiChatApp(App):
             return
         self.transcript.refresh(layout=True)
         self.transcript.scroll_end(animate=False)
-        self._last_scroll_y = float(self.transcript.scroll_y)
 
     def _request_scroll_end(self):
         if not self.follow_output:
@@ -706,16 +734,6 @@ class TuiChatApp(App):
 
     def _should_autofollow(self) -> bool:
         return self.follow_output
-
-    def _break_follow_if_user_scrolled_up(self):
-        """
-        Deterministic break that works regardless of which widget handled input:
-        if viewport Y decreased while follow is on, user scrolled up -> break follow.
-        """
-        current = float(self.transcript.scroll_y)
-        if self.follow_output and current < self._last_scroll_y - 0.1:
-            self._break_follow()
-        self._last_scroll_y = current
 
     async def on_input_submitted(self, event: Input.Submitted):
         text = event.value.strip()
@@ -898,7 +916,6 @@ class TuiChatApp(App):
             self.event_queue.put((turn_id, "error", str(exc)))
 
     def _drain_events(self):
-        self._break_follow_if_user_scrolled_up()
         processed = 0
         pending_think_token_inc = 0
         while True:
