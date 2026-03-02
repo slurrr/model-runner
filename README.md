@@ -50,6 +50,7 @@ pip install llama-cpp-python
   - Bottom grey input band with scrollable transcript above.
   - Collapsible streaming thinking section per assistant turn.
   - Hides `<think>` markers while routing inner content to a grey “thinking” panel.
+  - Optional `--assume-think` / `--no-assume-think` for models that emit only end-think markers.
 
 - `alex.py`
   - GGUF chat runner via `llama-cpp-python`.
@@ -87,6 +88,7 @@ python chat.py --config models/Nanbeige4.1-3B/hf/config --max-new-tokens 1024
 python chat.py --config Nanbeige4.1-3B --stream
 python tui.py Nanbeige4.1-3B
 python tui.py /mnt/d/models/your-model.gguf
+python tui.py /mnt/d/models/your-model.gguf --assume-think
 python tui.py ollama:your-ollama-model
 python tui.py ollama:your-ollama-model --backend ollama --ollama-think false
 python tui_chat.py --config Nanbeige4.1-3B
@@ -156,6 +158,7 @@ Selected HF knobs now exposed in CLI/config:
 
 - sampling: `temperature`, `top_p`, `top_k`, `typical_p`, `min_p`
 - output mode: `stream`
+- routing mode: `assume_think` (TUI)
 - length/termination: `max_new_tokens`, `max_time`, `stop_strings`
 - repetition/structure: `repetition_penalty`, `no_repeat_ngram_size`
 - decoding mode: `num_beams`
