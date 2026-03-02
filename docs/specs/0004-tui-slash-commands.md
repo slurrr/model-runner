@@ -52,6 +52,8 @@ Suggested styling:
 
 ### Generation-in-progress behavior
 Slash commands are allowed while a generation is running, but must be read-only in v1.
+- Implementation requirement: slash command parsing/dispatch MUST happen **before** the “generation in progress” input gate.
+  - i.e. normal user prompts are blocked during generation, but slash commands still work.
 - If a command implies mutation (future), show “Not allowed during generation”.
 
 ## Commands (v1)
@@ -79,10 +81,21 @@ Slash commands are allowed while a generation is running, but must be read-only 
     - resolved path to the system file (if used)
 - `/prefix`:
   - show:
-    - `user_prefix` (TUI common)
-    - `prompt_prefix` only if the active app/backend supports it (print “N/A” otherwise)
-    - `prompt_mode` (chat vs plain)
-    - chat template override source (if applicable; HF only)
+    - `user_prefix`
+    - `prompt_prefix` (if applicable; otherwise `N/A`)
+    - `prompt_mode` (chat vs plain; if applicable; otherwise `N/A`)
+    - chat template override source (HF only; otherwise `N/A`)
+
+Backend applicability contract (v1):
+
+| Field | HF | GGUF | Ollama |
+|---|---:|---:|---:|
+| `system` (content) | ✅ | ✅ | ✅ |
+| `system_file` (path) | ✅ | ✅ | ✅ |
+| `user_prefix` | ✅ | ✅ | ✅ |
+| `prompt_prefix` | N/A | N/A | N/A |
+| `prompt_mode` | ✅ | N/A | N/A |
+| `chat_template` / override source | ✅ | N/A | N/A |
 
 ### Model / config / environment shortcuts
 These are convenience aliases for `/show <topic>` (single implementation).
@@ -107,8 +120,12 @@ Suggested topics:
 - `/show prompt`
   - system prompt presence, system file, user_prefix, prompt_mode (if relevant)
 - `/show gen`
-  - max_new_tokens, temperature, top_p, top_k, stop strings
-  - backend-specific generation settings (only those that apply)
+  - Print “effective generation settings” in a way that is not misleading across backends:
+    - `args.*`: values after CLI+config merge (what the user asked for)
+    - `sent.*`: values actually included in the backend request payload / generate kwargs
+    - `deferred`: fields omitted from `sent.*` (backend/model defaults will apply)
+  - Example for Ollama:
+    - if `top_k` is `None`, it is omitted from `options` and therefore deferred to Ollama/model defaults.
 - `/show ui`
   - show_thinking, animation, scroll_lines, ui_tick_ms, ui_max_events_per_tick
 - `/show args`
@@ -124,6 +141,7 @@ Optional topics (if trivial from existing state):
 - `/show files` (resolved system file path, save_transcript path)
 - `/show model` (backend + resolved model id; same as `/model`)
 - `/show config` (loaded config path; same as `/config`)
+- `/show backend` (backend-specific info / identifiers; see “Backend-specific data” below)
 
 ### Aliases (v1)
 These should be implemented as simple dispatch to the canonical handler (to avoid drift).
@@ -145,6 +163,7 @@ Optional “shortcuts” (recommended if they don’t create ambiguity):
 - `/args` == `/show args`
 - `/history` == `/show history`
 - `/last` == `/show last`
+- `/backend` == `/show backend`
 
 ## Implementation design
 
@@ -154,6 +173,14 @@ Optional “shortcuts” (recommended if they don’t create ambiguity):
   - Example: `/show args --json`
 - Command name is the first token (without leading `/`).
 - Remaining tokens are `argv` for that command.
+
+Malformed quoting:
+- If `shlex.split` raises `ValueError` (e.g. unterminated quotes), show a clear local error message and a hint:
+  - “Unterminated quote. Tip: wrap strings in matching quotes or escape them.”
+
+Escaping literal prompts that start with `/`:
+- `//...` MUST be treated as a literal prompt starting with `/` (strip exactly one leading slash and send to the model as normal user input).
+  - Example: typing `//help me` sends `/help me` to the model.
 
 ### Registry
 Implement a small command registry for discoverability and “`/show` with no args prints options”.
@@ -192,6 +219,8 @@ For `/show backend` (or as part of `/show session`), the app can optionally quer
 
 ## Edge cases
 - Unknown command: show closest matches (case-insensitive).
+- Matching strategy MUST be deterministic:
+  - Use `difflib.get_close_matches(name, candidates, n=3, cutoff=0.5)`.
 - Empty `/` input: treat as `/help`.
 - Commands should not be stored in the model conversation history.
 - Large outputs (e.g. `/show args`):

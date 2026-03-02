@@ -15,9 +15,11 @@ Add a slash-command system to the TUI with these constraints:
 - Commands are implemented via a small **registry** with help metadata (name, aliases, usage, summary).
 - Command output is appended to the transcript as an “info message” widget so results are scrollable and part of the session’s visible trace.
 - Commands are read-only in v1; future mutations (if any) must be explicit and safe (and blocked during generation).
+- Transcript persistence remains unchanged in v1:
+  - `--save-transcript` continues to write model turn records (`TurnRecord`) only.
+  - Slash command outputs are UI-visible but are NOT persisted to the JSONL transcript unless we add an explicit option later.
 
 ## Consequences
 - Users can verify effective configuration at runtime (`/show`, `/system`, `/prefix`) and reduce “why is it behaving like this?” debugging time.
 - The registry makes commands discoverable (`/?`) and keeps implementation organized as commands expand.
 - Keeping commands local-only avoids accidental prompt pollution and makes command output safe to include in the transcript.
-

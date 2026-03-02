@@ -29,3 +29,93 @@ cp -a models/_TEMPLATE "models/ds32b-alex"
 
 # set experimental config values as default
 cp models/Nanbeige4.1-3B/hf/config/agent_en_fast.json models/Nanbeige4.1-3B/hf/config/config.json
+
+
+
+
+
+
+
+HOST="http://127.0.0.1:11434"
+# If that fails in WSL, try:
+# HOST="http://localhost:11434"
+# HOST="http://$(ip route | awk '/default/ {print $3; exit}'):11434"
+
+2. Stream a single-turn chat and print the raw JSON:
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": true,
+    "messages": [
+    {"role":"user","content":"Say hello, then think briefly, then answer."}
+    ]
+}'
+
+You’re looking for lines like:
+
+- {"message":{"thinking":"...","content":"..."}, ...}
+- or only {"message":{"content":"..."}, ...}
+
+3. If you want to highlight just thinking + content fields per chunk (still no extra tooling besides Python), run:
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": true,
+    "messages": [
+    {"role":"user","content":"Give a short answer to: what is 2+2?"}
+    ]
+}' \
+| .venv/bin/python - <<'PY'
+import sys, json
+for line in sys.stdin:
+    line=line.strip()
+    if not line:
+        continue
+    obj=json.loads(line)
+    msg=obj.get("message") or {}
+    thinking=msg.get("thinking","")
+    content=msg.get("content","")
+    if thinking:
+        print("THINK:", repr(thinking))
+    if content:
+        print("CONT :", repr(content))
+    if obj.get("done"):
+        break
+PY
+
+
+
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": true,
+    "messages": [{"role":"user","content":"Say hi then include </think> literally."}]
+}'
+
+If you have jq, print both fields explicitly (you’ll see thinking empty/missing, and content chunks exactly):
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": true,
+    "messages": [{"role":"user","content":"Output something, then include </think> literally."}]
+}' \
+| jq -r '[(.message.thinking // ""), (.message.content // "")] | @tsv'
+
+To capture the full final assembled assistant text (not chunk-by-chunk), run the same but with "stream": false:
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": false,
+    "messages": [{"role":"user","content":"Give a 1-paragraph answer about X."}]
+}' \
+| jq -r '.message.content'
