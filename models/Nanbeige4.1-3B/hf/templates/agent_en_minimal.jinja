@@ -1,0 +1,21 @@
+{%- set ns = namespace(has_system=false) -%}
+{%- for message in messages -%}
+  {%- if message['role'] == 'system' -%}
+    {%- set ns.has_system = true -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- if not ns.has_system -%}
+{{- '<|im_start|>system\nYou are a concise English-first assistant. Reply in English unless the user explicitly asks for another language. Prefer direct answers. Avoid emojis, fluff, and policy-style preambles unless explicitly requested.\n<|im_end|>\n' -}}
+{%- endif -%}
+{%- for message in messages -%}
+{{- '<|im_start|>' + message['role'] + '\n' -}}
+{%- if message['role'] == 'assistant' and '</think>' in message['content'] -%}
+{{- message['content'].split('</think>')[-1].lstrip('\n') -}}
+{%- else -%}
+{{- message['content'] -}}
+{%- endif -%}
+{{- '<|im_end|>\n' -}}
+{%- endfor -%}
+{%- if add_generation_prompt is defined and add_generation_prompt -%}
+{{- '<|im_start|>assistant\n' -}}
+{%- endif -%}

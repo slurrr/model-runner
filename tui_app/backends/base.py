@@ -1,0 +1,16 @@
+from __future__ import annotations
+
+from typing import Callable, Protocol
+
+from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnStart
+
+Event = TurnStart | ThinkDelta | AnswerDelta | Meta | Error | Finish
+EventEmitter = Callable[[Event], None]
+
+
+class BackendSession(Protocol):
+    backend_name: str
+    resolved_model_id: str
+
+    def generate_turn(self, turn_id: int, messages: list[dict[str, str]], emit: EventEmitter) -> None:
+        ...

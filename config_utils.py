@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 
 def _repo_root() -> str:
@@ -76,3 +77,58 @@ def load_json_config(config_arg: str, backend: str = "hf") -> tuple[dict, str]:
         raise ValueError("Config JSON must be an object at the top level.")
 
     return data, resolved
+
+
+def _normalize_model_ref(model_ref: str) -> str:
+    raw = os.path.expanduser((model_ref or "").strip())
+    win_drive = re.match(r"^([A-Za-z]):[\\/](.*)$", raw)
+    if win_drive:
+        drive = win_drive.group(1).lower()
+        rest = win_drive.group(2).replace("\\", "/")
+        raw = f"/mnt/{drive}/{rest}"
+    return raw
+
+
+def _model_name_candidates(model_ref: str) -> list[str]:
+    value = _normalize_model_ref(model_ref)
+    if not value:
+        return []
+
+    names: list[str] = []
+
+    if os.path.exists(value):
+        abs_path = os.path.abspath(value)
+        parts = abs_path.split(os.sep)
+        if "models" in parts:
+            idx = parts.index("models")
+            if idx + 1 < len(parts):
+                names.append(parts[idx + 1])
+        names.append(os.path.basename(abs_path.rstrip(os.sep)))
+    else:
+        names.append(os.path.basename(value.rstrip("/\\")))
+
+    # For HF IDs like org/model, use final segment.
+    if "/" in value and not os.path.exists(value):
+        names.append(value.rsplit("/", 1)[-1])
+
+    deduped: list[str] = []
+    seen = set()
+    for item in names:
+        key = item.strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        deduped.append(key)
+    return deduped
+
+
+def load_default_json_config_for_model(model_ref: str, backend: str = "hf") -> tuple[dict, str] | tuple[None, None]:
+    for candidate in _model_name_candidates(model_ref):
+        resolved = resolve_config_path(candidate, backend=backend)
+        if not resolved:
+            continue
+        with open(resolved, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if isinstance(data, dict):
+            return data, resolved
+    return None, None

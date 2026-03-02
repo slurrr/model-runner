@@ -59,3 +59,4 @@ typer==0.24.1
 typing_extensions==4.15.0
 sentencepiece
 tiktoken
+textual

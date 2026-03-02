@@ -32,12 +32,24 @@ pip install llama-cpp-python
 
 - `chat.py`
   - Chat loop with conversation history.
-  - Uses tokenizer native chat template.
+  - Uses tokenizer native chat template by default.
+  - Optional `--prompt-mode plain` for minimal role-formatted prompting (no chat template).
   - Decodes assistant-only new tokens.
   - Optional token streaming with `--stream`.
   - Supports precision selection via `--dtype`.
   - Default `--max-new-tokens` is `2048`.
   - Supports `-8bit` / `-4bit` (CUDA only).
+
+- `tui_chat.py`
+  - Legacy Textual TUI for HF chat.
+  - Kept as migration reference.
+
+- `tui.py`
+  - Unified Textual TUI entrypoint for HF, GGUF, and Ollama.
+  - Auto-detects backend from `model_id` or accepts `--backend`.
+  - Bottom grey input band with scrollable transcript above.
+  - Collapsible streaming thinking section per assistant turn.
+  - Hides `<think>` markers while routing inner content to a grey “thinking” panel.
 
 - `alex.py`
   - GGUF chat runner via `llama-cpp-python`.
@@ -62,6 +74,7 @@ Hugging Face chat run:
 
 ```bash
 python chat.py Nanbeige4.1-3B
+python chat.py Nanbeige4.1-3B --prompt-mode plain
 python chat.py Nanbeige4.1-3B --dtype bfloat16
 python chat.py Nanbeige4.1-3B -4bit --dtype float16 --system "You are concise."
 ```
@@ -72,6 +85,12 @@ Config-driven run (recommended):
 python chat.py --config Nanbeige4.1-3B
 python chat.py --config models/Nanbeige4.1-3B/hf/config --max-new-tokens 1024
 python chat.py --config Nanbeige4.1-3B --stream
+python tui.py Nanbeige4.1-3B
+python tui.py /mnt/d/models/your-model.gguf
+python tui.py ollama:your-ollama-model
+python tui.py ollama:your-ollama-model --backend ollama --ollama-think false
+python tui_chat.py --config Nanbeige4.1-3B
+python tui_chat.py --config Nanbeige4.1-3B --prompt-mode plain
 python runner.py --config Nanbeige4.1-3B
 ```
 
@@ -150,6 +169,7 @@ Selected HF knobs now exposed in CLI/config:
 
 - `runner.py`: baseline text generation flow.
 - `chat.py`: template-aware chat flow.
+- `tui.py` + `tui_app/`: unified Textual TUI + backend adapters.
 - `alex.py`: GGUF (`llama-cpp-python`) chat backend.
 - `ollama_chat.py`: Ollama HTTP streaming backend + filtering.
 - `models/`: model-first workspace for per-model config/notes/templates/prompts.
@@ -168,7 +188,7 @@ Selected HF knobs now exposed in CLI/config:
 
 1. Edit one script at a time.
 2. Run syntax checks:
-   - `python -m py_compile runner.py chat.py alex.py ollama_chat.py`
+   - `python -m py_compile runner.py chat.py tui.py tui_chat.py alex.py ollama_chat.py`
 3. Validate script help output:
    - `python <script>.py --help`
 4. Smoke-test with one known model per backend.

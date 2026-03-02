@@ -7,7 +7,7 @@ import threading
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
-from config_utils import load_json_config
+from config_utils import load_default_json_config_for_model, load_json_config
 
 
 class ThinkFilter:
@@ -217,33 +217,52 @@ def resolve_chat_template(template_spec, model_id):
         return fh.read()
 
 
-def apply_context_limit(tokenizer, messages, max_context_tokens):
+def render_plain_prompt(messages):
+    parts = []
+    for msg in messages:
+        role = msg.get("role", "")
+        content = (msg.get("content", "") or "").strip()
+        if not content:
+            continue
+        if role == "system":
+            parts.append(f"System: {content}\n")
+        elif role == "user":
+            parts.append(f"User: {content}\n")
+        elif role == "assistant":
+            parts.append(f"Assistant: {content}\n")
+        elif role == "tool":
+            parts.append(f"Tool: {content}\n")
+        else:
+            parts.append(f"{role.title() if role else 'Message'}: {content}\n")
+    parts.append("Assistant:")
+    return "\n".join(parts)
+
+
+def build_model_inputs(tokenizer, messages, prompt_mode):
+    if prompt_mode == "plain":
+        prompt = render_plain_prompt(messages)
+        return tokenizer(prompt, return_tensors="pt")
+
+    templated = tokenizer.apply_chat_template(
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_tensors="pt",
+        return_dict=True,
+    )
+    if isinstance(templated, torch.Tensor):
+        return {"input_ids": templated}
+    return dict(templated)
+
+
+def apply_context_limit(tokenizer, messages, max_context_tokens, prompt_mode):
     if not max_context_tokens:
-        templated = tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            return_dict=True,
-        )
-        if isinstance(templated, torch.Tensor):
-            return {"input_ids": templated}, messages
-        return dict(templated), messages
+        return build_model_inputs(tokenizer=tokenizer, messages=messages, prompt_mode=prompt_mode), messages
 
     # Keep system prompt and most recent turns until within budget.
     trimmed = list(messages)
     while True:
-        templated = tokenizer.apply_chat_template(
-            trimmed,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            return_dict=True,
-        )
-        if isinstance(templated, torch.Tensor):
-            candidate_inputs = {"input_ids": templated}
-        else:
-            candidate_inputs = dict(templated)
+        candidate_inputs = build_model_inputs(tokenizer=tokenizer, messages=trimmed, prompt_mode=prompt_mode)
 
         input_len = candidate_inputs["input_ids"].shape[-1]
         if input_len <= max_context_tokens:
@@ -263,6 +282,7 @@ def apply_context_limit(tokenizer, messages, max_context_tokens):
 def main():
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--config", default="")
+    pre_parser.add_argument("model_id", nargs="?")
     pre_args, _ = pre_parser.parse_known_args()
 
     parser = argparse.ArgumentParser(description="Simple local HF chat runner")
@@ -285,6 +305,12 @@ def main():
         choices=["auto", "float16", "bfloat16", "float32"],
         default="auto",
         help="Model precision. 'auto' picks float16 on CUDA, float32 on CPU.",
+    )
+    parser.add_argument(
+        "--prompt-mode",
+        choices=["chat", "plain"],
+        default="chat",
+        help="Prompt construction mode: chat template or plain role-formatted prompt.",
     )
     parser.add_argument(
         "--hide-think",
@@ -339,6 +365,7 @@ def main():
     )
 
     config_data = {}
+    resolved = None
     if pre_args.config:
         try:
             config_data, resolved = load_json_config(pre_args.config, backend="hf")
@@ -346,6 +373,10 @@ def main():
         except Exception as exc:
             print(f"Failed to load config: {exc}")
             sys.exit(1)
+    elif pre_args.model_id:
+        config_data, resolved = load_default_json_config_for_model(pre_args.model_id, backend="hf")
+        if resolved:
+            print(f"Loaded default config: {resolved}")
 
     supported_keys = {
         "model_id",
@@ -362,6 +393,7 @@ def main():
         "no_repeat_ngram_size",
         "stop_strings",
         "dtype",
+        "prompt_mode",
         "hide_think",
         "strict_think_strip",
         "system",
@@ -406,10 +438,11 @@ def main():
 
     try:
         tokenizer = load_tokenizer(args.model_id)
-        template_override = resolve_chat_template(args.chat_template, args.model_id)
-        if template_override is not None:
-            tokenizer.chat_template = template_override
-            print(f"Chat template override: {args.chat_template}")
+        if args.prompt_mode == "chat":
+            template_override = resolve_chat_template(args.chat_template, args.model_id)
+            if template_override is not None:
+                tokenizer.chat_template = template_override
+                print(f"Chat template override: {args.chat_template}")
 
         model_kwargs = {}
         input_device = device
@@ -441,7 +474,7 @@ def main():
         print("If tokenizer conversion fails, install: sentencepiece, tiktoken, protobuf")
         sys.exit(1)
 
-    if tokenizer.chat_template is None:
+    if args.prompt_mode == "chat" and tokenizer.chat_template is None:
         print("Tokenizer has no chat template. Use runner.py or a chat model/tokenizer.")
         sys.exit(1)
 
@@ -474,6 +507,7 @@ def main():
             tokenizer=tokenizer,
             messages=messages,
             max_context_tokens=args.max_context_tokens,
+            prompt_mode=args.prompt_mode,
         )
         if trimmed_messages is not messages:
             messages = trimmed_messages

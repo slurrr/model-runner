@@ -7,7 +7,7 @@ import threading
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
-from config_utils import load_json_config
+from config_utils import load_default_json_config_for_model, load_json_config
 
 
 class ThinkFilter:
@@ -164,6 +164,7 @@ def load_tokenizer(model_id):
 def main():
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--config", default="")
+    pre_parser.add_argument("model_id", nargs="?")
     pre_args, _ = pre_parser.parse_known_args()
 
     parser = argparse.ArgumentParser(description="Simple local HF model runner")
@@ -213,6 +214,7 @@ def main():
     )
 
     config_data = {}
+    resolved = None
     if pre_args.config:
         try:
             config_data, resolved = load_json_config(pre_args.config, backend="hf")
@@ -220,6 +222,10 @@ def main():
         except Exception as exc:
             print(f"Failed to load config: {exc}")
             sys.exit(1)
+    elif pre_args.model_id:
+        config_data, resolved = load_default_json_config_for_model(pre_args.model_id, backend="hf")
+        if resolved:
+            print(f"Loaded default config: {resolved}")
 
     supported_keys = {
         "model_id",

@@ -15,6 +15,48 @@
 - `model_type`: `llama` (`LlamaForCausalLM`)
 - Dtype in config: `bfloat16`
 - Context: `max_position_embeddings=262144` (very large)
+- RoPE: `rope_theta=70000000`, `rope_scaling=null` (i.e., no explicit “scaling” block; the long context is baked into the checkpoint config)
+
+## Recommended context windows (practical)
+The model advertises an extremely large maximum context, but “what you should set” is usually governed by **KV cache memory** and **latency**.
+
+### Rule of thumb
+- Use the smallest context that fits your workload comfortably.
+- Increase `--max-context-tokens` only when you *need* the history.
+- Expect generation to slow down roughly linearly with prompt length (each new token attends over the whole prompt).
+
+### KV cache memory estimates (this model)
+This is a 32-layer Llama with GQA (`num_key_value_heads=4`, `head_dim=128`). Approx KV cache size (FP16/BF16) is:
+
+- ~0.5 GiB at 8k tokens
+- ~1.0 GiB at 16k tokens
+- ~2.0 GiB at 32k tokens
+- ~4.0 GiB at 64k tokens
+- ~8.0 GiB at 128k tokens
+
+Notes:
+- KV cache cost scales with **(layers × seq_len × kv_heads × head_dim × bytes)**; weights/activations are extra.
+- On CPU (`float32`), KV cache is roughly **2×** the FP16/BF16 numbers.
+
+### Suggested defaults by use case
+- General chat / agent loops (OpenClaw-style): start at **8k–16k**
+- “Long session” + tools + scratchpad: **16k–32k** (this repo’s current config uses `max_context_tokens=32768`)
+- Large document work: **32k–64k** if your VRAM/latency budget allows
+- 128k+: treat as **experimental** (it may work, but it can get slow and memory-hungry fast)
+
+### Suggested starting point on the primary dev machine (RTX 4090 24GB VRAM)
+Given `docs/environments/primary-dev-machine.md`:
+- Start with:
+  - `--dtype float16` (or `auto` on CUDA)
+  - `--max-context-tokens 32768`
+  - `--max-new-tokens 2048` (or lower while iterating)
+- If you want more history and can tolerate latency:
+  - try `--max-context-tokens 65536`
+- 128k context is *plausible* memory-wise on 24GB (KV cache is ~8 GiB at 128k in FP16/BF16 for this architecture), but it can become slow; treat it as a special-mode setting rather than a daily default.
+
+### Important: what `--max-context-tokens` actually does here
+In `chat.py` / `tui_chat.py`, `--max-context-tokens` is a **prompt trimming budget**: the runner drops oldest turns until the tokenized prompt fits.
+It does not “force” the model to use a long context; it just prevents aggressive trimming.
 
 ## Tokenizer / prompting (from local tokenizer files)
 - Chat template uses Qwen-style separators:
