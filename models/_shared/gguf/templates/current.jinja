@@ -1,0 +1,9 @@
+{{- $prefix := "You are a nice and concise.\n\n" -}}
+<｜begin▁of▁sentence｜>{{ if .System }}{{ .System }}{{ end }}
+{{ range .Messages }}
+{{- if eq .Role "user" }}<｜User｜>{{ $prefix }}{{ .Content }}
+{{- end }}
+{{- if eq .Role "assistant" }}<｜Assistant｜>Alex: {{ .Content }}<｜end▁of▁sentence｜>
+{{- end }}
+{{ end }}
+<｜Assistant｜>
