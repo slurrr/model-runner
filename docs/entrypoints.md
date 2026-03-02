@@ -15,3 +15,9 @@ python chat.py Nanbeige4.1-3B -4bit --dtype float16 --system "You are concise."
 python tui_chat.py --config Nanbeige4.1-3B
 python tui_chat.py --config Nanbeige4.1-3B --prompt-mode plain
 python tui_chat.py --config Nanbeige4.1-3B --show-thinking
+
+python tui.py Nanbeige4.1-3B
+python tui.py --config Nanbeige4.1-3B
+python tui.py /mnt/d/models/your-model.gguf
+python tui.py ollama:your-ollama-model
+python tui.py ollama:your-ollama-model --backend ollama --ollama-think false

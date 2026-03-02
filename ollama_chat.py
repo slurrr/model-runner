@@ -25,7 +25,9 @@ class ThinkFilter:
         # Hold early output briefly to detect and strip that prefix if present.
         self.implicit_prefix_mode = True
         self.implicit_prefix_buffer = ""
-        self.implicit_prefix_probe_limit = None if strict_prefix_strip else 8192
+        # Keep this small so streaming doesn't appear frozen on normal replies.
+        # Strict mode keeps probing until a closing marker appears.
+        self.implicit_prefix_probe_limit = None if strict_prefix_strip else 256
 
     @staticmethod
     def _find_first(text: str, markers: list[str]) -> tuple[int, str]:
