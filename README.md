@@ -32,7 +32,8 @@ pip install llama-cpp-python
 
 - `chat.py`
   - Chat loop with conversation history.
-  - Uses tokenizer native chat template.
+  - Uses tokenizer native chat template by default.
+  - Optional `--prompt-mode plain` for minimal role-formatted prompting (no chat template).
   - Decodes assistant-only new tokens.
   - Optional token streaming with `--stream`.
   - Supports precision selection via `--dtype`.
@@ -68,6 +69,7 @@ Hugging Face chat run:
 
 ```bash
 python chat.py Nanbeige4.1-3B
+python chat.py Nanbeige4.1-3B --prompt-mode plain
 python chat.py Nanbeige4.1-3B --dtype bfloat16
 python chat.py Nanbeige4.1-3B -4bit --dtype float16 --system "You are concise."
 ```
@@ -79,6 +81,7 @@ python chat.py --config Nanbeige4.1-3B
 python chat.py --config models/Nanbeige4.1-3B/hf/config --max-new-tokens 1024
 python chat.py --config Nanbeige4.1-3B --stream
 python tui_chat.py --config Nanbeige4.1-3B
+python tui_chat.py --config Nanbeige4.1-3B --prompt-mode plain
 python runner.py --config Nanbeige4.1-3B
 ```
 

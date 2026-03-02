@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 
 import torch
-from config_utils import load_json_config
+from config_utils import load_default_json_config_for_model, load_json_config
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -131,32 +131,51 @@ def resolve_chat_template(template_spec, model_id, config_path: str | None = Non
         return fh.read()
 
 
-def apply_context_limit(tokenizer, messages, max_context_tokens):
+def render_plain_prompt(messages):
+    parts = []
+    for msg in messages:
+        role = msg.get("role", "")
+        content = (msg.get("content", "") or "").strip()
+        if not content:
+            continue
+        if role == "system":
+            parts.append(f"System: {content}\n")
+        elif role == "user":
+            parts.append(f"User: {content}\n")
+        elif role == "assistant":
+            parts.append(f"Assistant: {content}\n")
+        elif role == "tool":
+            parts.append(f"Tool: {content}\n")
+        else:
+            parts.append(f"{role.title() if role else 'Message'}: {content}\n")
+    parts.append("Assistant:")
+    return "\n".join(parts)
+
+
+def build_model_inputs(tokenizer, messages, prompt_mode):
+    if prompt_mode == "plain":
+        prompt = render_plain_prompt(messages)
+        return tokenizer(prompt, return_tensors="pt")
+
+    templated = tokenizer.apply_chat_template(
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_tensors="pt",
+        return_dict=True,
+    )
+    if isinstance(templated, torch.Tensor):
+        return {"input_ids": templated}
+    return dict(templated)
+
+
+def apply_context_limit(tokenizer, messages, max_context_tokens, prompt_mode):
     if not max_context_tokens:
-        templated = tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            return_dict=True,
-        )
-        if isinstance(templated, torch.Tensor):
-            return {"input_ids": templated}, messages
-        return dict(templated), messages
+        return build_model_inputs(tokenizer=tokenizer, messages=messages, prompt_mode=prompt_mode), messages
 
     trimmed = list(messages)
     while True:
-        templated = tokenizer.apply_chat_template(
-            trimmed,
-            tokenize=True,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            return_dict=True,
-        )
-        if isinstance(templated, torch.Tensor):
-            candidate_inputs = {"input_ids": templated}
-        else:
-            candidate_inputs = dict(templated)
+        candidate_inputs = build_model_inputs(tokenizer=tokenizer, messages=trimmed, prompt_mode=prompt_mode)
 
         input_len = candidate_inputs["input_ids"].shape[-1]
         if input_len <= max_context_tokens:
@@ -526,6 +545,13 @@ class AssistantMessage(Container):
 
 
 class TranscriptPane(VerticalScroll):
+    def _line_step(self) -> int:
+        try:
+            step = int(getattr(self.app.runtime.args, "scroll_lines", 3))
+        except Exception:
+            step = 3
+        return max(1, step)
+
     def _at_bottom(self, eps: float = 0.1) -> bool:
         return float(self.scroll_y) >= float(self.max_scroll_y) - eps
 
@@ -539,7 +565,9 @@ class TranscriptPane(VerticalScroll):
 
     def action_scroll_up(self):
         self._break_follow()
-        return super().action_scroll_up()
+        step = self._line_step()
+        target = max(0.0, float(self.scroll_y) - step)
+        self.scroll_to(y=target, animate=False)
 
     def action_page_up(self):
         self._break_follow()
@@ -550,10 +578,11 @@ class TranscriptPane(VerticalScroll):
         return super().action_scroll_home()
 
     def action_scroll_down(self):
-        result = super().action_scroll_down()
+        step = self._line_step()
+        target = min(float(self.max_scroll_y), float(self.scroll_y) + step)
+        self.scroll_to(y=target, animate=False)
         if self._at_bottom():
             self._resume_follow()
-        return result
 
     def action_page_down(self):
         result = super().action_page_down()
@@ -674,7 +703,7 @@ class TuiChatApp(App):
         self.turn_records = []
         self.follow_output = True
         self._scroll_end_scheduled = False
-        self._max_events_per_tick = 240
+        self._max_events_per_tick = max(20, int(runtime.args.ui_max_events_per_tick))
 
     def compose(self) -> ComposeResult:
         self.transcript = TranscriptPane(id="transcript")
@@ -684,7 +713,8 @@ class TuiChatApp(App):
 
     def on_mount(self):
         self.transcript.can_focus = True
-        self.set_interval(0.05, self._drain_events)
+        interval_s = max(0.01, float(self.runtime.args.ui_tick_ms) / 1000.0)
+        self.set_interval(interval_s, self._drain_events)
         self.call_after_refresh(self._scroll_to_end_now)
 
     def action_toggle_latest_thinking(self):
@@ -787,6 +817,7 @@ class TuiChatApp(App):
                 tokenizer=tokenizer,
                 messages=self.messages,
                 max_context_tokens=args.max_context_tokens,
+                prompt_mode=args.prompt_mode,
             )
             self.messages = trimmed
 
@@ -980,6 +1011,7 @@ class TuiChatApp(App):
 def parse_args():
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--config", default="")
+    pre_parser.add_argument("model_id", nargs="?")
     pre_args, _ = pre_parser.parse_known_args()
 
     parser = argparse.ArgumentParser(description="Textual TUI chat for local HF models")
@@ -999,6 +1031,7 @@ def parse_args():
     parser.add_argument("--no-repeat-ngram-size", type=int, default=0)
     parser.add_argument("--stop-strings", nargs="+", default=None)
     parser.add_argument("--dtype", choices=["auto", "float16", "bfloat16", "float32"], default="auto")
+    parser.add_argument("--prompt-mode", choices=["chat", "plain"], default="chat")
     parser.add_argument("--chat-template", default="", help="Template selector: default | search | <path>")
     parser.add_argument("--system", default="", help="Optional system prompt")
     parser.add_argument("--system-file", default="", help="Optional system prompt file")
@@ -1007,6 +1040,9 @@ def parse_args():
     parser.add_argument("--show-thinking", action="store_true", help="Start with thinking panels expanded")
     parser.add_argument("--no-animate-thinking", action="store_true", help="Disable thinking header animation")
     parser.add_argument("--save-transcript", default="", help="Optional JSONL path to save raw/parsed per-turn output")
+    parser.add_argument("--scroll-lines", type=int, default=1, help="Lines per up/down scroll step (mouse wheel + line scroll).")
+    parser.add_argument("--ui-tick-ms", type=int, default=33, help="UI queue drain tick in milliseconds.")
+    parser.add_argument("--ui-max-events-per-tick", type=int, default=120, help="Max queued stream events processed each UI tick.")
     parser.add_argument("-8bit", "--8bit", dest="use_8bit", action="store_true")
     parser.add_argument("-4bit", "--4bit", dest="use_4bit", action="store_true")
 
@@ -1019,6 +1055,10 @@ def parse_args():
         except Exception as exc:
             print(f"Failed to load config: {exc}")
             sys.exit(1)
+    elif pre_args.model_id:
+        config_data, config_path = load_default_json_config_for_model(pre_args.model_id, backend="hf")
+        if config_path:
+            print(f"Loaded default config: {config_path}")
 
     supported_keys = {
         "model_id",
@@ -1035,6 +1075,7 @@ def parse_args():
         "no_repeat_ngram_size",
         "stop_strings",
         "dtype",
+        "prompt_mode",
         "chat_template",
         "system",
         "system_file",
@@ -1043,6 +1084,9 @@ def parse_args():
         "show_thinking",
         "no_animate_thinking",
         "save_transcript",
+        "scroll_lines",
+        "ui_tick_ms",
+        "ui_max_events_per_tick",
         "use_8bit",
         "use_4bit",
     }
@@ -1087,10 +1131,11 @@ def load_runtime(args: argparse.Namespace) -> TuiRuntime:
 
     try:
         tokenizer = load_tokenizer(args.model_id)
-        template_override = resolve_chat_template(args.chat_template, args.model_id, config_path=args._config_path)
-        if template_override is not None:
-            tokenizer.chat_template = template_override
-            print(f"Chat template override: {args.chat_template}")
+        if args.prompt_mode == "chat":
+            template_override = resolve_chat_template(args.chat_template, args.model_id, config_path=args._config_path)
+            if template_override is not None:
+                tokenizer.chat_template = template_override
+                print(f"Chat template override: {args.chat_template}")
 
         model_kwargs = {}
         input_device = device
@@ -1122,7 +1167,7 @@ def load_runtime(args: argparse.Namespace) -> TuiRuntime:
         print("If tokenizer conversion fails, install: sentencepiece, tiktoken, protobuf")
         sys.exit(1)
 
-    if tokenizer.chat_template is None:
+    if args.prompt_mode == "chat" and tokenizer.chat_template is None:
         print("Tokenizer has no chat template. This TUI requires a chat model/tokenizer.")
         sys.exit(1)
 
