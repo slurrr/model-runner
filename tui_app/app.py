@@ -17,7 +17,7 @@ from textual.binding import Binding
 from textual.containers import Container, VerticalScroll
 from textual.events import MouseScrollDown, MouseScrollUp
 from textual.reactive import reactive
-from textual.widgets import Input, Static
+from textual.widgets import Static, TextArea
 
 from tui_app.backends.base import BackendSession, Event
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnStart
@@ -331,13 +331,16 @@ class UnifiedTuiApp(App):
     #thinking-body { color: grey; margin: 0 0 0 2; height: auto; width: 100%; text-wrap: wrap; }
     .assistant-answer { color: white; height: auto; width: 100%; text-wrap: wrap; }
     .assistant-hint { margin: 1 0 0 0; }
-    #input-band { dock: bottom; height: 3; background: #3a3a3a; padding: 0 1; }
-    #chat-input { width: 100%; background: #3a3a3a; color: white; border: none; }
+    #input-band { dock: bottom; height: 6; background: #3a3a3a; padding: 0 1; }
+    #chat-input { width: 100%; height: 100%; background: #3a3a3a; color: white; border: none; }
     """
 
     BINDINGS = [
         Binding("t", "toggle_latest_thinking", "Toggle thinking"),
-        Binding("ctrl+c", "interrupt_or_quit_hint", "Interrupt generation", priority=True),
+        Binding("ctrl+x", "interrupt_or_quit_hint", "Interrupt generation", priority=True),
+        Binding("enter", "submit_prompt", "Send", priority=True),
+        Binding("shift+enter", "insert_newline", "New line", priority=True),
+        Binding("ctrl+j", "insert_newline", "New line", priority=True),
         Binding("pageup", "scroll_page_up", "Scroll up", priority=True),
         Binding("pagedown", "scroll_page_down", "Scroll down", priority=True),
         Binding("home", "scroll_home", "Scroll top", priority=True),
@@ -369,13 +372,22 @@ class UnifiedTuiApp(App):
         self.transcript = TranscriptPane(id="transcript")
         yield self.transcript
         with Container(id="input-band"):
-            yield Input(placeholder="Type message and press Enter", id="chat-input")
+            yield TextArea(
+                text="",
+                soft_wrap=True,
+                tab_behavior="focus",
+                show_line_numbers=False,
+                placeholder="Type message. Enter sends. New line: Ctrl+J (Shift+Enter if terminal supports it).",
+                id="chat-input",
+            )
 
     def on_mount(self):
         self.transcript.can_focus = True
         interval_s = max(0.01, float(self.runtime.args.ui_tick_ms) / 1000.0)
         self.set_interval(interval_s, self._drain_events)
         self.call_after_refresh(self._scroll_to_end_now)
+        # Keep typing flow immediate: start with the input focused.
+        self.query_one("#chat-input", TextArea).focus()
 
     def action_toggle_latest_thinking(self):
         if self.pending_assistant is not None:
@@ -399,6 +411,10 @@ class UnifiedTuiApp(App):
         if self._should_autofollow():
             self._request_scroll_end()
         self.notify("Generation stopped.", severity="information")
+
+    def action_insert_newline(self):
+        input_box = self.query_one("#chat-input", TextArea)
+        input_box.insert("\n")
 
     def _break_follow(self):
         self.follow_output = False
@@ -443,16 +459,17 @@ class UnifiedTuiApp(App):
     def _should_autofollow(self) -> bool:
         return self.follow_output
 
-    async def on_input_submitted(self, event: Input.Submitted):
-        text = event.value.strip()
+    async def action_submit_prompt(self):
+        input_box = self.query_one("#chat-input", TextArea)
+        text = input_box.text.strip()
         if not text:
-            event.input.value = ""
+            input_box.load_text("")
             return
         if text.startswith("//"):
             text = text[1:]
         elif text.startswith("/"):
             await self._run_slash_command(text)
-            event.input.value = ""
+            input_box.load_text("")
             return
         if self.is_generating:
             self.notify("Generation in progress. Wait for current turn to finish.")
@@ -465,7 +482,7 @@ class UnifiedTuiApp(App):
             self.messages = []
             if self.runtime.args.system:
                 self.messages.append({"role": "system", "content": self.runtime.args.system})
-            event.input.value = ""
+            input_box.load_text("")
             return
 
         user_text = f"{self.runtime.args.user_prefix}{text}" if self.runtime.args.user_prefix else text
@@ -485,7 +502,7 @@ class UnifiedTuiApp(App):
         self.follow_output = True
         self.transcript.refresh(layout=True)
         self._request_scroll_end()
-        event.input.value = ""
+        input_box.load_text("")
 
         thread = threading.Thread(target=self._run_generation, args=(turn_id, list(self.messages)), daemon=True)
         thread.start()
@@ -804,17 +821,90 @@ class UnifiedTuiApp(App):
                 if optional_key not in sent:
                     deferred.append(optional_key)
         elif backend == "gguf":
-            keys = ["max_new_tokens", "temperature", "top_p", "stop_strings", "n_ctx", "n_gpu_layers"]
+            keys = [
+                "max_new_tokens",
+                "temperature",
+                "top_p",
+                "top_k",
+                "min_p",
+                "typical_p",
+                "repetition_penalty",
+                "stop_strings",
+                "n_ctx",
+                "n_gpu_layers",
+                "prompt_mode",
+                "chat_template",
+            ]
             sent = {
                 "max_tokens": args.max_new_tokens,
                 "temperature": args.temperature,
                 "top_p": args.top_p,
             }
+            if args.top_k is not None:
+                sent["top_k"] = args.top_k
+            if args.min_p is not None:
+                sent["min_p"] = args.min_p
+            if args.typical_p is not None:
+                sent["typical_p"] = args.typical_p
+            if args.repetition_penalty not in (None, 1.0):
+                sent["repeat_penalty"] = args.repetition_penalty
             if args.stop_strings is not None:
                 sent["stop"] = args.stop_strings
             deferred = []
-            if "stop" not in sent:
-                deferred.append("stop_strings")
+            for optional_key, sent_key in (
+                ("top_k", "top_k"),
+                ("min_p", "min_p"),
+                ("typical_p", "typical_p"),
+                ("repetition_penalty", "repeat_penalty"),
+                ("stop_strings", "stop"),
+            ):
+                if sent_key not in sent:
+                    deferred.append(optional_key)
+        elif backend == "exl2":
+            keys = [
+                "max_new_tokens",
+                "temperature",
+                "top_p",
+                "top_k",
+                "min_p",
+                "typical_p",
+                "repetition_penalty",
+                "frequency_penalty",
+                "presence_penalty",
+                "stop_strings",
+                "max_seq_len",
+                "min_free_tokens",
+                "gpu_split",
+                "cache_type",
+                "exl2_stop_tokens",
+                "exl2_repeat_streak_max",
+            ]
+            sent = {
+                "max_new_tokens": args.max_new_tokens,
+                "temperature": args.temperature,
+                "top_p": args.top_p,
+                "top_k": (args.top_k or 0),
+                "min_p": (args.min_p or 0),
+                "typical": (args.typical_p or 0),
+                "repetition_penalty": args.repetition_penalty,
+                "frequency_penalty": (args.frequency_penalty or 0.0),
+                "presence_penalty": (args.presence_penalty or 0.0),
+                "max_seq_len": args.max_seq_len,
+                "min_free_tokens": args.min_free_tokens,
+                "cache_type": args.cache_type,
+                "exl2_repeat_streak_max": args.exl2_repeat_streak_max,
+            }
+            deferred = []
+            if args.stop_strings:
+                sent["stop_strings"] = args.stop_strings
+            if args.exl2_stop_tokens:
+                sent["exl2_stop_tokens"] = args.exl2_stop_tokens
+            else:
+                deferred.append("exl2_stop_tokens(auto:<end_of_turn>,<start_of_turn>,eos)")
+            if args.gpu_split and args.gpu_split != "auto":
+                sent["gpu_split"] = args.gpu_split
+            else:
+                deferred.append("gpu_split(full single-GPU load)")
         else:
             keys = ["max_new_tokens", "temperature", "top_p", "top_k", "stop_strings", "ollama_think"]
             sent = {}

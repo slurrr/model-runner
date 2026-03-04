@@ -7,6 +7,7 @@ import sys
 
 from config_utils import load_default_json_config_for_model, load_json_config
 from tui_app.app import TuiRuntime, UnifiedTuiApp
+from tui_app.backends.exl2 import create_session as create_exl2_session
 from tui_app.backends.gguf import create_session as create_gguf_session
 from tui_app.backends.hf import create_session as create_hf_session
 from tui_app.backends.ollama import create_session as create_ollama_session
@@ -31,6 +32,8 @@ def detect_backend(model: str | None, backend_override: str | None) -> str:
     normalized = normalize_windows_path(model)
     if normalized.startswith("ollama:"):
         return "ollama"
+    if normalized.startswith("exl2:"):
+        return "exl2"
     if normalized.lower().endswith(".gguf"):
         return "gguf"
     if os.path.isdir(normalized):
@@ -74,13 +77,25 @@ def _load_default_backend_config(model: str, backend: str):
     return None, None
 
 
+def _infer_backend_from_default_config(model: str) -> str | None:
+    matches: list[str] = []
+    for backend in ("hf", "gguf", "ollama", "exl2"):
+        _, path = _load_default_backend_config(model, backend=backend)
+        if path:
+            matches.append(backend)
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Unified Textual TUI for HF + GGUF + Ollama backends")
+    parser = argparse.ArgumentParser(description="Unified Textual TUI for HF + GGUF + Ollama + EXL2 backends")
     parser.add_argument("model_id", nargs="?", help="Model id/path, .gguf path, or ollama:<name>")
-    parser.add_argument("--backend", choices=["hf", "gguf", "ollama"], default=None)
+    parser.add_argument("--backend", choices=["hf", "gguf", "ollama", "exl2"], default=None)
     parser.add_argument("--config", default="", help="Config path or name.")
 
     parser.add_argument("--max-new-tokens", type=int, default=2048)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--stream", dest="stream", action="store_true")
     parser.add_argument("--no-stream", dest="stream", action="store_false")
     parser.add_argument("--temperature", type=float, default=0.7)
@@ -108,6 +123,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--chat-template", default="")
     parser.add_argument("--max-context-tokens", type=int, default=None)
     parser.add_argument("--repetition-penalty", type=float, default=1.0)
+    parser.add_argument("--presence-penalty", type=float, default=None)
+    parser.add_argument("--frequency-penalty", type=float, default=None)
     parser.add_argument("--typical-p", type=float, default=None)
     parser.add_argument("--min-p", type=float, default=None)
     parser.add_argument("--max-time", type=float, default=None)
@@ -118,21 +135,57 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--n-ctx", type=int, default=4096)
     parser.add_argument("--n-gpu-layers", type=int, default=-1)
+    parser.add_argument("--model-path", default="")
+
+    # EXL2 / ExLlamaV2 knobs (TUI only)
+    parser.add_argument("--max-seq-len", dest="max_seq_len", type=int, default=None)
+    parser.add_argument("--min-free-tokens", type=int, default=256)
+    parser.add_argument("--gpu-split", default="")
+    parser.add_argument("--cache-type", choices=["fp16", "8bit", "q4", "q6", "q8"], default="fp16")
+    parser.add_argument("--exl2-stop-tokens", nargs="+", default=None)
+    parser.add_argument("--exl2-repeat-streak-max", type=int, default=64)
+    parser.add_argument("--rope-scale", type=float, default=None)
+    parser.add_argument("--rope-alpha", type=float, default=None)
+    parser.add_argument("--rope-yarn", type=float, default=None)
+    parser.add_argument("--low-mem", action="store_true")
+    parser.add_argument("--exl2-repo-path", default="")
+
+    flash_group = parser.add_mutually_exclusive_group()
+    flash_group.add_argument("--flash-attn", dest="flash_attn", action="store_true")
+    flash_group.add_argument("--no-flash-attn", dest="flash_attn", action="store_false")
+
+    xformers_group = parser.add_mutually_exclusive_group()
+    xformers_group.add_argument("--xformers", dest="xformers", action="store_true")
+    xformers_group.add_argument("--no-xformers", dest="xformers", action="store_false")
+
+    sdpa_group = parser.add_mutually_exclusive_group()
+    sdpa_group.add_argument("--sdpa", dest="sdpa", action="store_true")
+    sdpa_group.add_argument("--no-sdpa", dest="sdpa", action="store_false")
+
+    graphs_group = parser.add_mutually_exclusive_group()
+    graphs_group.add_argument("--graphs", dest="graphs", action="store_true")
+    graphs_group.add_argument("--no-graphs", dest="graphs", action="store_false")
 
     parser.add_argument("--ollama-host", default=None)
     parser.add_argument("--ollama-timeout", type=int, default=600)
     parser.add_argument("--ollama-think", choices=["auto", "true", "false"], default="auto")
 
     parser.set_defaults(stream=True, assume_think=None)
+    parser.set_defaults(flash_attn=None, xformers=None, sdpa=None, graphs=None)
     return parser
 
 
 def _collect_config_defaults(config_data: dict | None) -> dict:
     if not isinstance(config_data, dict):
         return {}
+    normalized = dict(config_data)
+    # Backward compatibility for early EXL2 configs.
+    if "typical_p" not in normalized and "typical" in normalized:
+        normalized["typical_p"] = normalized.get("typical")
     supported = {
         "model_id",
         "max_new_tokens",
+        "seed",
         "stream",
         "temperature",
         "top_p",
@@ -153,6 +206,8 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "chat_template",
         "max_context_tokens",
         "repetition_penalty",
+        "presence_penalty",
+        "frequency_penalty",
         "typical_p",
         "min_p",
         "max_time",
@@ -162,16 +217,33 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "use_4bit",
         "n_ctx",
         "n_gpu_layers",
+        "model_path",
+        "max_seq_len",
+        "min_free_tokens",
+        "gpu_split",
+        "cache_type",
+        "exl2_stop_tokens",
+        "exl2_repeat_streak_max",
+        "rope_scale",
+        "rope_alpha",
+        "rope_yarn",
+        "low_mem",
+        "exl2_repo_path",
+        "flash_attn",
+        "xformers",
+        "sdpa",
+        "graphs",
         "ollama_host",
         "ollama_timeout",
         "ollama_think",
     }
-    return {k: v for k, v in config_data.items() if k in supported}
+    return {k: v for k, v in normalized.items() if k in supported}
 
 
 def _detect_cli_overrides(argv: list[str]) -> set[str]:
     option_to_dest = {
         "--max-new-tokens": "max_new_tokens",
+        "--seed": "seed",
         "--temperature": "temperature",
         "--top-p": "top_p",
         "--top-k": "top_k",
@@ -181,6 +253,7 @@ def _detect_cli_overrides(argv: list[str]) -> set[str]:
         "--user-prefix": "user_prefix",
         "--assume-think": "assume_think",
         "--no-assume-think": "assume_think",
+        "--model-path": "model_path",
         "--ollama-host": "ollama_host",
         "--ollama-timeout": "ollama_timeout",
         "--ollama-think": "ollama_think",
@@ -214,8 +287,44 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
             "use_8bit",
             "use_4bit",
         },
-        "gguf": {"n_ctx", "n_gpu_layers"},
+        "gguf": {
+            "n_ctx",
+            "n_gpu_layers",
+            "prompt_mode",
+            "chat_template",
+            "top_k",
+            "min_p",
+            "typical_p",
+            "repetition_penalty",
+            "model_path",
+        },
         "ollama": {"ollama_host", "ollama_timeout", "ollama_think"},
+        "exl2": {
+            "model_path",
+            "prompt_mode",
+            "chat_template",
+            "top_k",
+            "min_p",
+            "typical_p",
+            "repetition_penalty",
+            "presence_penalty",
+            "frequency_penalty",
+            "max_seq_len",
+            "min_free_tokens",
+            "gpu_split",
+            "cache_type",
+            "exl2_stop_tokens",
+            "exl2_repeat_streak_max",
+            "rope_scale",
+            "rope_alpha",
+            "rope_yarn",
+            "low_mem",
+            "exl2_repo_path",
+            "flash_attn",
+            "xformers",
+            "sdpa",
+            "graphs",
+        },
     }
 
     common = {
@@ -223,6 +332,7 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
         "backend",
         "config",
         "max_new_tokens",
+        "seed",
         "stream",
         "temperature",
         "top_p",
@@ -265,11 +375,15 @@ def parse_args() -> argparse.Namespace:
 
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("model_id", nargs="?")
-    pre.add_argument("--backend", choices=["hf", "gguf", "ollama"], default=None)
+    pre.add_argument("--backend", choices=["hf", "gguf", "ollama", "exl2"], default=None)
     pre.add_argument("--config", default="")
     pre_args, _ = pre.parse_known_args()
 
     backend = detect_backend(pre_args.model_id, pre_args.backend)
+    if pre_args.model_id and not pre_args.config and pre_args.backend is None:
+        inferred = _infer_backend_from_default_config(pre_args.model_id)
+        if inferred:
+            backend = inferred
 
     config_data = {}
     config_path = None
@@ -295,9 +409,17 @@ def parse_args() -> argparse.Namespace:
         parser.error("model_id is required (or provide model_id in --config).")
 
     args.backend = detect_backend(args.model_id, args.backend)
+    if args.model_id and not pre_args.config and pre_args.backend is None:
+        inferred = _infer_backend_from_default_config(args.model_id)
+        if inferred:
+            args.backend = inferred
     args._config_path = config_path
     if args.assume_think is None:
         args.assume_think = False
+    if args.backend == "gguf" and args.model_path:
+        args.model_id = _resolve_path_maybe_relative(args.model_path, config_path=config_path)
+    if args.backend == "exl2" and isinstance(args.model_id, str) and args.model_id.startswith("exl2:"):
+        args.model_id = args.model_id.split(":", 1)[1]
 
     if not args.system and args.system_file:
         try:
@@ -322,6 +444,8 @@ def main() -> None:
             session = create_gguf_session(args)
         elif args.backend == "ollama":
             session = create_ollama_session(args)
+        elif args.backend == "exl2":
+            session = create_exl2_session(args)
         else:
             raise RuntimeError(f"Unknown backend: {args.backend}")
     except Exception as exc:

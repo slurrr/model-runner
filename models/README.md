@@ -15,6 +15,7 @@ Backends are typically:
 - `hf` (Hugging Face / Transformers)
 - `gguf` (llama-cpp-python)
 - `ollama` (Ollama API)
+- `exl2` (ExLlamaV2 / EXL2)
 
 Shared assets:
 - `models/_shared/<backend>/templates/`

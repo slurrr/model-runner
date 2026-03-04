@@ -4,6 +4,7 @@ Lightweight local model runner scripts for:
 - Hugging Face text/chat models (`transformers` + `torch`)
 - GGUF models via `llama-cpp-python`
 - Ollama models via HTTP API with optional reasoning-filtered output
+- EXL2 models via ExLlamaV2 (unified TUI backend)
 
 ## User Guide
 
@@ -26,6 +27,10 @@ Optional GGUF support:
 ```bash
 pip install llama-cpp-python
 ```
+
+Optional EXL2 support:
+
+- See `docs/exl2_setup.md`
 
 ### 2) Scripts and What They Do
 
@@ -50,7 +55,7 @@ pip install llama-cpp-python
   - Kept as migration reference.
 
 - `tui.py`
-  - Unified Textual TUI entrypoint for HF, GGUF, and Ollama.
+  - Unified Textual TUI entrypoint for HF, GGUF, Ollama, and EXL2.
   - Auto-detects backend from `model_id` or accepts `--backend`.
   - Bottom grey input band with scrollable transcript above.
   - Collapsible streaming thinking section per assistant turn.
@@ -74,6 +79,7 @@ Unified TUI (recommended):
 tui Nanbeige4.1-3B
 tui /mnt/d/models/your-model.gguf
 tui ollama:your-ollama-model
+tui --backend exl2 /path/to/exl2_model_dir
 ```
 
 Hugging Face text run:

@@ -15,6 +15,7 @@ What it supports:
 - HF / Transformers (local folder or HF id)
 - GGUF via llama.cpp (`.gguf` path; requires `llama-cpp-python`)
 - Ollama (`ollama:<name>`; requires Ollama running)
+- EXL2 via ExLlamaV2 (`--backend exl2`; requires ExLlamaV2)
 
 Examples:
 ```bash
@@ -31,7 +32,14 @@ python tui.py /mnt/d/models/your-model.gguf
 tui ollama:your-ollama-model
 python tui.py ollama:your-ollama-model
 python tui.py ollama:your-ollama-model --ollama-think false
+
+# EXL2 (directory path is ambiguous with HF; use --backend)
+tui --backend exl2 /path/to/exl2_model_dir
+python tui.py --backend exl2 /path/to/exl2_model_dir
 ```
+
+Notes:
+- EXL2 setup can be finicky under WSL; see `docs/exl2_setup.md`.
 
 Notes:
 - `tui_app/` is an internal package used by `tui.py` (don’t run `tui_app/app.py` directly).
@@ -95,5 +103,5 @@ These are useful for isolating backend issues or doing quick checks without the 
 
 To add a new model folder (notes/config/templates/prompts) from `models/_TEMPLATE/`:
 ```bash
-python scripts/model add <model_name> <hf|gguf|ollama> [--id <backend_id>]
+python scripts/model add <model_name> <hf|gguf|ollama|exl2> [--id <backend_id>]
 ```

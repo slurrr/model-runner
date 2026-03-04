@@ -119,3 +119,60 @@ curl -N -sS "$HOST/api/chat" \
     "messages": [{"role":"user","content":"Give a 1-paragraph answer about X."}]
 }' \
 | jq -r '.message.content'
+
+
+
+PYTHONPATH=~/ml/exllamav2 .venv/bin/python - <<'PY'
+from exllamav2.attn import has_flash_attn, has_xformers, has_lower_right_sdpa
+print("flash_attn:", has_flash_attn)
+print("xformers:", has_xformers)
+print("sdpa:", has_lower_right_sdpa)
+PY
+
+
+export CUDA_HOME=/usr/local/cuda-12.8
+export CUDACXX="$CUDA_HOME/bin/nvcc"
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+export TORCH_CUDA_ARCH_LIST="8.9"
+export MAX_JOBS=1   # keep if you want; slower but conservative
+hash -r
+
+.venv/bin/python -m pip install -U pip setuptools wheel
+.venv/bin/python -m pip install -U ninja
+
+.venv/bin/python -m pip install -v --no-build-isolation --force-reinstall flash-attn 2>&1 | tee /tmp/fa.log
+
+Before the install, it’s also worth verifying you’re really using nvcc 12.8:
+
+which nvcc
+nvcc --version
+
+
+export CUDA_HOME=/usr/local/cuda-12.8
+export CUDACXX="$CUDA_HOME/bin/nvcc"
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+
+export TORCH_CUDA_ARCH_LIST="8.9"
+export FLASH_ATTENTION_CUDA_ARCHS="89"   # this is the key one for flash-attn
+export MAX_JOBS=1
+
+.venv/bin/python -m pip install -U ninja
+.venv/bin/python -m pip install -v --no-build-isolation --force-reinstall flash-attn 2>&1 | tee /tmp/fa.log
+
+
+PYTHONPATH=~/ml/exllamav2 .venv/bin/python - <<'PY'
+from exllamav2.attn import has_flash_attn, has_xformers, has_lower_right_sdpa
+print("flash_attn:", has_flash_attn)
+print("xformers:", has_xformers)
+print("sdpa:", has_lower_right_sdpa)
+PY
+
+And:
+
+.venv/bin/python - <<'PY'
+import flash_attn, torch
+print("flash_attn", flash_attn.__version__)
+print("torch", torch.__version__, "cuda", torch.version.cuda)
+PY
