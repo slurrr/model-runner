@@ -1,0 +1,55 @@
+{#-
+Gemma-family EXL2 chat template (repo-local) intended for "assumed thinking" routing.
+
+Use with:
+- `assume_think=true` (so the UI routes early output to the thinking panel)
+- a system prompt that instructs the model to emit `</think>` before the final answer
+
+This template is identical to `gemma_chat_sanitized.jinja` except it adds a literal "<think>\n"
+inside the assistant generation prefix to encourage the model to stay in a "thinking" mode.
+
+Important:
+- The UI router does NOT see prompt tokens, only generated output.
+- This works best when paired with `assume_think=true` and an explicit instruction to output `</think>`.
+-#}
+
+{{ bos_token }}
+{%- if messages and messages[0]["role"] == "system" -%}
+  {%- set first_user_prefix = (messages[0]["content"] | trim) ~ "\n\n" -%}
+  {%- set loop_messages = messages[1:] -%}
+{%- else -%}
+  {%- set first_user_prefix = "" -%}
+  {%- set loop_messages = messages -%}
+{%- endif -%}
+
+{%- for message in loop_messages -%}
+  {%- if message["role"] == "assistant" -%}
+    {%- set role = "model" -%}
+  {%- else -%}
+    {%- set role = message["role"] -%}
+  {%- endif -%}
+<start_of_turn>{{ role }}
+  {%- if loop.first and role == "user" and first_user_prefix -%}
+{{ first_user_prefix }}
+  {%- endif -%}
+  {%- if message["content"] is string -%}
+    {%- if role == "model" -%}
+      {%- set content = (message["content"] | trim) -%}
+      {%- if "</think>" in content -%}
+        {%- set content = content.split("</think>")[-1] -%}
+      {%- endif -%}
+{{ content }}
+    {%- else -%}
+{{ message["content"] | trim }}
+    {%- endif -%}
+  {%- else -%}
+{{ message["content"] }}
+  {%- endif -%}
+<end_of_turn>
+{%- endfor -%}
+
+{%- if add_generation_prompt -%}
+<start_of_turn>model
+<think>
+{%- endif -%}
+

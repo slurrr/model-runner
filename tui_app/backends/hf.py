@@ -188,7 +188,13 @@ def apply_context_limit(tokenizer, messages, max_context_tokens, prompt_mode):
 
 
 class TokenCountingTextIteratorStreamer(BaseStreamer):
-    def __init__(self, tokenizer, skip_prompt: bool = True, timeout: float | None = None):
+    def __init__(
+        self,
+        tokenizer,
+        skip_prompt: bool = True,
+        timeout: float | None = None,
+        assume_think: bool = False,
+    ):
         self.tokenizer = tokenizer
         self.skip_prompt = skip_prompt
         self.timeout = timeout
@@ -197,7 +203,7 @@ class TokenCountingTextIteratorStreamer(BaseStreamer):
         self.token_cache = []
         self.print_len = 0
         self.next_tokens_are_prompt = True
-        self.mode = "answer"
+        self.mode = "think" if assume_think else "answer"
         self.start_marker_ids = self._single_token_marker_ids(
             ["<think>", "<|begin_of_thought|>", "<｜begin_of_thought｜>", "<｜begin▁of▁thought｜>"]
         )
@@ -316,7 +322,7 @@ class HFSession:
         emit(TurnStart(turn_id=turn_id))
 
         started = time.time()
-        router = ThinkRouter()
+        router = ThinkRouter(assume_think=args.assume_think)
         raw_parts = []
         think_parts = []
         answer_parts = []
@@ -361,12 +367,25 @@ class HFSession:
                 generate_kwargs["tokenizer"] = tokenizer
 
             if args.stream:
-                streamer = TokenCountingTextIteratorStreamer(tokenizer, skip_prompt=True)
+                streamer = TokenCountingTextIteratorStreamer(
+                    tokenizer,
+                    skip_prompt=True,
+                    assume_think=args.assume_think,
+                )
                 generate_kwargs["streamer"] = streamer
+                gen_error: list[Exception] = []
 
                 def _generate():
-                    with torch.no_grad():
-                        model.generate(**model_inputs, **generate_kwargs)
+                    try:
+                        with torch.no_grad():
+                            model.generate(**model_inputs, **generate_kwargs)
+                    except Exception as exc:
+                        gen_error.append(exc)
+                        # Ensure consumer iterator unblocks even on generation failure.
+                        try:
+                            streamer.end()
+                        except Exception:
+                            pass
 
                 gen_thread = threading.Thread(target=_generate, daemon=True)
                 gen_thread.start()
@@ -391,6 +410,8 @@ class HFSession:
                             emit(AnswerDelta(turn_id=turn_id, text=text))
 
                 gen_thread.join()
+                if gen_error:
+                    raise RuntimeError(str(gen_error[0]))
             else:
                 input_len = model_inputs["input_ids"].shape[-1]
                 with torch.no_grad():

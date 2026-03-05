@@ -1,0 +1,178 @@
+# Useful CLI Commands
+# nvidia-smi with GPU utilization, memory usage, temperature, and power draw, updated every 0.5 seconds, formatted in a readable table
+nvidia-smi --query-gpu=index,name,utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu,power.draw
+--format=csv,noheader,nounits -l 0.5 \
+| awk -F',' 'BEGIN{printf "%-3s %-24s %7s %7s %12s %8s %8s\n","GPU","Name","GPU%","MEM%","Mem(used/tot)","TempC","PowerW"; print
+"------------------------------------------------------------------------------------------------"} {gsub(/^ +| +$/,"",$1); gsub(/^ +| +$/,"",
+$2); gsub(/^ +| +$/,"",$3); gsub(/^ +| +$/,"",$4); gsub(/^ +| +$/,"",$5); gsub(/^ +| +$/,"",$6); gsub(/^ +| +$/,"",$7); gsub(/^ +| +$/,"",$8);
+printf "%-3s %-24s %7s %7s %6s/%-5s %8s %8s\n",$1,$2,$3,$4,$5,$6,$7,$8 }'
+
+
+# To add a new model, copy the _TEMPLATE folder and fill in the relevant config and notes files. For example:
+MODEL="MyModel"
+cp -a models/_TEMPLATE "models/$MODEL"
+
+Then fill in what matters:
+
+- HF: models/$MODEL/hf/config/config.json + models/$MODEL/hf/notes/README.md
+- GGUF: models/$MODEL/gguf/notes/README.md (and add config/config.json when you’re ready)
+- Ollama: models/$MODEL/ollama/config/config.json + models/$MODEL/ollama/notes/README.md
+
+For an Ollama-tagged name like foo:latest, use a folder-safe name and store the real Ollama name in config:
+
+MODEL="foo__latest"
+cp -a models/_TEMPLATE "models/$MODEL"
+# then set: models/$MODEL/ollama/config/config.json -> "model": "foo:latest"
+
+# e.g. for Ollama, add the model like this:
+cp -a models/_TEMPLATE "models/ds32b-alex"
+
+# set experimental config values as default
+cp models/Nanbeige4.1-3B/hf/config/agent_en_fast.json models/Nanbeige4.1-3B/hf/config/config.json
+
+
+
+
+
+
+
+HOST="http://127.0.0.1:11434"
+# If that fails in WSL, try:
+# HOST="http://localhost:11434"
+# HOST="http://$(ip route | awk '/default/ {print $3; exit}'):11434"
+
+2. Stream a single-turn chat and print the raw JSON:
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": true,
+    "messages": [
+    {"role":"user","content":"Say hello, then think briefly, then answer."}
+    ]
+}'
+
+You’re looking for lines like:
+
+- {"message":{"thinking":"...","content":"..."}, ...}
+- or only {"message":{"content":"..."}, ...}
+
+3. If you want to highlight just thinking + content fields per chunk (still no extra tooling besides Python), run:
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": true,
+    "messages": [
+    {"role":"user","content":"Give a short answer to: what is 2+2?"}
+    ]
+}' \
+| .venv/bin/python - <<'PY'
+import sys, json
+for line in sys.stdin:
+    line=line.strip()
+    if not line:
+        continue
+    obj=json.loads(line)
+    msg=obj.get("message") or {}
+    thinking=msg.get("thinking","")
+    content=msg.get("content","")
+    if thinking:
+        print("THINK:", repr(thinking))
+    if content:
+        print("CONT :", repr(content))
+    if obj.get("done"):
+        break
+PY
+
+
+
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": true,
+    "messages": [{"role":"user","content":"Say hi then include </think> literally."}]
+}'
+
+If you have jq, print both fields explicitly (you’ll see thinking empty/missing, and content chunks exactly):
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": true,
+    "messages": [{"role":"user","content":"Output something, then include </think> literally."}]
+}' \
+| jq -r '[(.message.thinking // ""), (.message.content // "")] | @tsv'
+
+To capture the full final assembled assistant text (not chunk-by-chunk), run the same but with "stream": false:
+
+curl -N -sS "$HOST/api/chat" \
+-H 'Content-Type: application/json' \
+-d '{
+    "model": "ds32b-alex",
+    "stream": false,
+    "messages": [{"role":"user","content":"Give a 1-paragraph answer about X."}]
+}' \
+| jq -r '.message.content'
+
+
+
+PYTHONPATH=~/ml/exllamav2 .venv/bin/python - <<'PY'
+from exllamav2.attn import has_flash_attn, has_xformers, has_lower_right_sdpa
+print("flash_attn:", has_flash_attn)
+print("xformers:", has_xformers)
+print("sdpa:", has_lower_right_sdpa)
+PY
+
+
+export CUDA_HOME=/usr/local/cuda-12.8
+export CUDACXX="$CUDA_HOME/bin/nvcc"
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+export TORCH_CUDA_ARCH_LIST="8.9"
+export MAX_JOBS=1   # keep if you want; slower but conservative
+hash -r
+
+.venv/bin/python -m pip install -U pip setuptools wheel
+.venv/bin/python -m pip install -U ninja
+
+.venv/bin/python -m pip install -v --no-build-isolation --force-reinstall flash-attn 2>&1 | tee /tmp/fa.log
+
+Before the install, it’s also worth verifying you’re really using nvcc 12.8:
+
+which nvcc
+nvcc --version
+
+
+export CUDA_HOME=/usr/local/cuda-12.8
+export CUDACXX="$CUDA_HOME/bin/nvcc"
+export PATH="$CUDA_HOME/bin:$PATH"
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
+
+export TORCH_CUDA_ARCH_LIST="8.9"
+export FLASH_ATTENTION_CUDA_ARCHS="89"   # this is the key one for flash-attn
+export MAX_JOBS=1
+
+.venv/bin/python -m pip install -U ninja
+.venv/bin/python -m pip install -v --no-build-isolation --force-reinstall flash-attn 2>&1 | tee /tmp/fa.log
+
+
+PYTHONPATH=~/ml/exllamav2 .venv/bin/python - <<'PY'
+from exllamav2.attn import has_flash_attn, has_xformers, has_lower_right_sdpa
+print("flash_attn:", has_flash_attn)
+print("xformers:", has_xformers)
+print("sdpa:", has_lower_right_sdpa)
+PY
+
+And:
+
+.venv/bin/python - <<'PY'
+import flash_attn, torch
+print("flash_attn", flash_attn.__version__)
+print("torch", torch.__version__, "cuda", torch.version.cuda)
+PY

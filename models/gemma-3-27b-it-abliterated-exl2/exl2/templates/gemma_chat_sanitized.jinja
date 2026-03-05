@@ -1,0 +1,56 @@
+{#-
+Gemma-family EXL2 chat template (repo-local, EXL2-compatible).
+
+Why this exists:
+- Gemma instruct models are sensitive to `<start_of_turn>` / `<end_of_turn>` markers.
+- The model's tokenizer_config `chat_template` uses `raise_exception(...)` which our minimal Jinja environment may not provide.
+
+Behavior:
+- If the first message is `role=system`, inject it as a prefix into the first user turn (matching Gemma tokenizer templates).
+- Map assistant role to `model`.
+- Wrap every message in:
+    <start_of_turn>{role}\n{content}<end_of_turn>\n
+- Sanitize assistant history: if an assistant message contains `</think>`, only replay content after the final `</think>`.
+- Add generation prompt:
+    <start_of_turn>model\n
+-#}
+
+{{ bos_token }}
+{%- if messages and messages[0]["role"] == "system" -%}
+  {%- set first_user_prefix = (messages[0]["content"] | trim) ~ "\n\n" -%}
+  {%- set loop_messages = messages[1:] -%}
+{%- else -%}
+  {%- set first_user_prefix = "" -%}
+  {%- set loop_messages = messages -%}
+{%- endif -%}
+
+{%- for message in loop_messages -%}
+  {%- if message["role"] == "assistant" -%}
+    {%- set role = "model" -%}
+  {%- else -%}
+    {%- set role = message["role"] -%}
+  {%- endif -%}
+<start_of_turn>{{ role }}
+  {%- if loop.first and role == "user" and first_user_prefix -%}
+{{ first_user_prefix }}
+  {%- endif -%}
+  {%- if message["content"] is string -%}
+    {%- if role == "model" -%}
+      {%- set content = (message["content"] | trim) -%}
+      {%- if "</think>" in content -%}
+        {%- set content = content.split("</think>")[-1] -%}
+      {%- endif -%}
+{{ content }}
+    {%- else -%}
+{{ message["content"] | trim }}
+    {%- endif -%}
+  {%- else -%}
+{{ message["content"] }}
+  {%- endif -%}
+<end_of_turn>
+{%- endfor -%}
+
+{%- if add_generation_prompt -%}
+<start_of_turn>model
+{%- endif -%}
+

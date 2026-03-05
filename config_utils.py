@@ -95,21 +95,35 @@ def _model_name_candidates(model_ref: str) -> list[str]:
         return []
 
     names: list[str] = []
+    gguf_exts = {".gguf"}
 
-    if os.path.exists(value):
+    def add_name(raw_name: str) -> None:
+        cleaned = (raw_name or "").strip()
+        if not cleaned:
+            return
+        names.append(cleaned)
+        stem, ext = os.path.splitext(cleaned)
+        if stem and ext.lower() in gguf_exts:
+            names.append(stem)
+
+    if value.startswith("ollama:"):
+        suffix = value.split(":", 1)[1]
+        add_name(suffix)
+        add_name(suffix.replace("/", "__").replace(":", "__"))
+    elif os.path.exists(value):
         abs_path = os.path.abspath(value)
         parts = abs_path.split(os.sep)
         if "models" in parts:
             idx = parts.index("models")
             if idx + 1 < len(parts):
-                names.append(parts[idx + 1])
-        names.append(os.path.basename(abs_path.rstrip(os.sep)))
+                add_name(parts[idx + 1])
+        add_name(os.path.basename(abs_path.rstrip(os.sep)))
     else:
-        names.append(os.path.basename(value.rstrip("/\\")))
+        add_name(os.path.basename(value.rstrip("/\\")))
 
     # For HF IDs like org/model, use final segment.
-    if "/" in value and not os.path.exists(value):
-        names.append(value.rsplit("/", 1)[-1])
+    if "/" in value and not os.path.exists(value) and not value.startswith("ollama:"):
+        add_name(value.rsplit("/", 1)[-1])
 
     deduped: list[str] = []
     seen = set()

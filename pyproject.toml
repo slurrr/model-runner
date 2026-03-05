@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "model-runner"
+version = "0.0.0"
+description = "Lightweight local model runner scripts (HF, GGUF, Ollama) with a unified Textual TUI."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+tui = "tui:main"
+
+[tool.setuptools]
+py-modules = ["tui", "config_utils"]
+
+[tool.setuptools.packages.find]
+include = ["tui_app*"]

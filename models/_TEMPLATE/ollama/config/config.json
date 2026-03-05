@@ -1,0 +1,22 @@
+{
+  "model_id": "",
+  "stream": true,
+  "max_new_tokens": 2048,
+  "temperature": 0.7,
+  "top_p": 1.0,
+  "top_k": null,
+  "stop_strings": null,
+  "system": "",
+  "system_file": "",
+  "user_prefix": "",
+  "show_thinking": false,
+  "no_animate_thinking": false,
+  "save_transcript": "",
+  "assume_think": false,
+  "ollama_host": null,
+  "ollama_timeout": 600,
+  "ollama_think": "auto",
+  "scroll_lines": 9,
+  "ui_tick_ms": 33,
+  "ui_max_events_per_tick": 33
+}

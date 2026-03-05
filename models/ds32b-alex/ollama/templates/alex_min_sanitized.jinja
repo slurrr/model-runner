@@ -1,0 +1,24 @@
+{{/*
+Minimal chat template for ds32b-alex (Ollama).
+
+Goals:
+- Keep formatting minimal (no literal "Alex:" / markdown speaker labels).
+- Preserve current role-token structure.
+- Sanitize assistant history by dropping any pre-`</think>` content before sending it back in future turns.
+
+Note: this relies on Ollama's template function set (sprig-style helpers like `contains`, `splitList`, `last`).
+*/}}
+<｜begin▁of▁sentence｜>{{ if .System }}<｜System｜>{{ .System }}<｜end▁of▁sentence｜>{{ end }}
+{{- range .Messages }}
+{{- if eq .Role "user" -}}
+<｜User｜>{{ .Content }}<｜end▁of▁sentence｜>
+{{- end -}}
+{{- if eq .Role "assistant" -}}
+{{- $content := .Content -}}
+{{- if and $content (contains $content "</think>") -}}
+{{- $content = last (splitList "</think>" $content) -}}
+{{- end -}}
+<｜Assistant｜>{{ $content }}<｜end▁of▁sentence｜>
+{{- end -}}
+{{- end }}
+<｜Assistant｜>

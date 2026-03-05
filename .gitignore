@@ -48,3 +48,5 @@ models/**/prompts/**
 !models/**/prompts/README.md
 
 
+alex.jinja
+*character/

@@ -4,6 +4,7 @@ Lightweight local model runner scripts for:
 - Hugging Face text/chat models (`transformers` + `torch`)
 - GGUF models via `llama-cpp-python`
 - Ollama models via HTTP API with optional reasoning-filtered output
+- EXL2 models via ExLlamaV2 (unified TUI backend)
 
 ## User Guide
 
@@ -16,11 +17,20 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+Optional (recommended): install a console entrypoint for the unified TUI:
+```bash
+pip install -e .
+```
+
 Optional GGUF support:
 
 ```bash
 pip install llama-cpp-python
 ```
+
+Optional EXL2 support:
+
+- See `docs/exl2_setup.md`
 
 ### 2) Scripts and What They Do
 
@@ -45,11 +55,12 @@ pip install llama-cpp-python
   - Kept as migration reference.
 
 - `tui.py`
-  - Unified Textual TUI entrypoint for HF, GGUF, and Ollama.
+  - Unified Textual TUI entrypoint for HF, GGUF, Ollama, and EXL2.
   - Auto-detects backend from `model_id` or accepts `--backend`.
   - Bottom grey input band with scrollable transcript above.
   - Collapsible streaming thinking section per assistant turn.
   - Hides `<think>` markers while routing inner content to a grey “thinking” panel.
+  - Optional `--assume-think` / `--no-assume-think` for models that emit only end-think markers.
 
 - `alex.py`
   - GGUF chat runner via `llama-cpp-python`.
@@ -62,6 +73,14 @@ pip install llama-cpp-python
   - Auto-detects Ollama host (`OLLAMA_HOST`, localhost, WSL gateway).
 
 ### 3) Common Commands
+
+Unified TUI (recommended):
+```bash
+tui Nanbeige4.1-3B
+tui /mnt/d/models/your-model.gguf
+tui ollama:your-ollama-model
+tui --backend exl2 /path/to/exl2_model_dir
+```
 
 Hugging Face text run:
 
@@ -85,8 +104,11 @@ Config-driven run (recommended):
 python chat.py --config Nanbeige4.1-3B
 python chat.py --config models/Nanbeige4.1-3B/hf/config --max-new-tokens 1024
 python chat.py --config Nanbeige4.1-3B --stream
+python -m pip install -e .
+tui Nanbeige4.1-3B
 python tui.py Nanbeige4.1-3B
 python tui.py /mnt/d/models/your-model.gguf
+python tui.py /mnt/d/models/your-model.gguf --assume-think
 python tui.py ollama:your-ollama-model
 python tui.py ollama:your-ollama-model --backend ollama --ollama-think false
 python tui_chat.py --config Nanbeige4.1-3B
@@ -156,6 +178,7 @@ Selected HF knobs now exposed in CLI/config:
 
 - sampling: `temperature`, `top_p`, `top_k`, `typical_p`, `min_p`
 - output mode: `stream`
+- routing mode: `assume_think` (TUI)
 - length/termination: `max_new_tokens`, `max_time`, `stop_strings`
 - repetition/structure: `repetition_penalty`, `no_repeat_ngram_size`
 - decoding mode: `num_beams`

@@ -3,13 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import time
 import urllib.error
 import urllib.request
 
 from tui_app.backends.base import EventEmitter
-from tui_app.events import AnswerDelta, Error, Finish, ThinkDelta, TurnRecord, TurnStart
+from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnRecord, TurnStart
 from tui_app.think_router import ThinkRouter
 
 
@@ -77,71 +78,125 @@ class OllamaSession:
         emit(TurnStart(turn_id=turn_id))
         started = time.time()
 
+        cli_overrides = set(getattr(self.args, "_cli_overrides", set()) or set())
+        config_keys = set(getattr(self.args, "_config_keys", set()) or set())
+
+        def _is_user_set(name: str) -> bool:
+            return name in cli_overrides or name in config_keys
+
+        options: dict[str, object] = {}
+        if _is_user_set("temperature") and self.args.temperature is not None:
+            options["temperature"] = self.args.temperature
+        if _is_user_set("top_p") and self.args.top_p is not None:
+            options["top_p"] = self.args.top_p
+        if _is_user_set("top_k") and self.args.top_k is not None:
+            options["top_k"] = self.args.top_k
+        if _is_user_set("max_new_tokens") and self.args.max_new_tokens is not None:
+            options["num_predict"] = self.args.max_new_tokens
+        if _is_user_set("stop_strings") and self.args.stop_strings is not None:
+            options["stop"] = self.args.stop_strings
+
         payload = {
             "model": self.resolved_model_id,
             "messages": messages,
             "stream": True,
-            "options": {
-                "temperature": self.args.temperature,
-                "top_p": self.args.top_p,
-                "top_k": self.args.top_k,
-                "num_predict": self.args.max_new_tokens,
-                "stop": self.args.stop_strings,
-            },
         }
-        payload["options"] = {k: v for k, v in payload["options"].items() if v is not None}
+        if options:
+            payload["options"] = options
         if self.args.ollama_think in {"true", "false"}:
             payload["think"] = self.args.ollama_think == "true"
 
-        req = urllib.request.Request(
-            self.host.rstrip("/") + "/api/chat",
-            data=json.dumps(payload).encode("utf-8"),
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-
-        router = ThinkRouter()
+        router = ThinkRouter(assume_think=self.args.assume_think)
         raw_parts: list[str] = []
         think_parts: list[str] = []
         answer_parts: list[str] = []
 
-        try:
+        def _emit_think_text(text: str) -> None:
+            if not text:
+                return
+            think_parts.append(text)
+            emit(ThinkDelta(turn_id=turn_id, text=text))
+            # Approximate token count for non-HF backends.
+            token_inc = len(re.findall(r"\S+", text))
+            if token_inc > 0:
+                emit(Meta(turn_id=turn_id, key="think_tokens_inc", value=token_inc))
+
+        def _stream_chat(request_payload: dict):
+            req = urllib.request.Request(
+                self.host.rstrip("/") + "/api/chat",
+                data=json.dumps(request_payload).encode("utf-8"),
+                method="POST",
+                headers={"Content-Type": "application/json"},
+            )
             with urllib.request.urlopen(req, timeout=self.args.ollama_timeout) as resp:
                 for raw_line in resp:
                     line = raw_line.decode("utf-8", errors="ignore").strip()
                     if not line:
                         continue
-                    obj = json.loads(line)
-                    msg = obj.get("message", {}) or {}
+                    yield json.loads(line)
 
-                    thinking = msg.get("thinking", "")
-                    content = msg.get("content", "")
-                    if not isinstance(thinking, str):
-                        thinking = str(thinking)
-                    if not isinstance(content, str):
-                        content = str(content)
+        def _consume_stream(request_payload: dict) -> None:
+            for obj in _stream_chat(request_payload):
+                msg = obj.get("message", {}) or {}
 
+                thinking = msg.get("thinking", "")
+                content = msg.get("content", "")
+                if not isinstance(thinking, str):
+                    thinking = str(thinking)
+                if not isinstance(content, str):
+                    content = str(content)
+
+                if thinking:
+                    raw_parts.append(thinking)
+                    _emit_think_text(thinking)
+
+                if content:
+                    raw_parts.append(content)
                     if thinking:
-                        think_parts.append(thinking)
-                        raw_parts.append(thinking)
-                        emit(ThinkDelta(turn_id=turn_id, text=thinking))
+                        answer_parts.append(content)
+                        emit(AnswerDelta(turn_id=turn_id, text=content))
+                    else:
+                        for channel, text in router.feed(content):
+                            if channel == "think":
+                                _emit_think_text(text)
+                            else:
+                                answer_parts.append(text)
+                                emit(AnswerDelta(turn_id=turn_id, text=text))
 
-                    if content:
-                        raw_parts.append(content)
-                        if thinking:
-                            answer_parts.append(content)
-                            emit(AnswerDelta(turn_id=turn_id, text=content))
-                        else:
-                            for channel, text in router.feed(content):
-                                if channel == "think":
-                                    think_parts.append(text)
-                                    emit(ThinkDelta(turn_id=turn_id, text=text))
-                                else:
-                                    answer_parts.append(text)
-                                    emit(AnswerDelta(turn_id=turn_id, text=text))
+                if obj.get("done"):
+                    break
 
-                    if obj.get("done"):
-                        break
+        try:
+            try:
+                _consume_stream(payload)
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="ignore").strip()
+                if exc.code == 400 and "think" in payload:
+                    retry_payload = dict(payload)
+                    retry_payload.pop("think", None)
+                    try:
+                        _consume_stream(retry_payload)
+                    except urllib.error.HTTPError as retry_exc:
+                        retry_body = retry_exc.read().decode("utf-8", errors="ignore").strip()
+                        detail = f"Ollama API request failed: HTTP {retry_exc.code} {retry_exc.reason}"
+                        if retry_body:
+                            detail += f" | body: {retry_body}"
+                        detail += " | retry_without_think=true"
+                        emit(Error(turn_id=turn_id, message=detail))
+                        return
+                else:
+                    detail = f"Ollama API request failed: HTTP {exc.code} {exc.reason}"
+                    if body:
+                        detail += f" | body: {body}"
+                    emit(Error(turn_id=turn_id, message=detail))
+                    return
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="ignore").strip()
+            detail = f"Ollama API request failed: HTTP {exc.code} {exc.reason}"
+            if body:
+                detail += f" | body: {body}"
+            emit(Error(turn_id=turn_id, message=detail))
+            return
         except urllib.error.URLError as exc:
             emit(Error(turn_id=turn_id, message=f"Ollama API request failed: {exc}"))
             return
@@ -151,8 +206,7 @@ class OllamaSession:
 
         for channel, text in router.flush():
             if channel == "think":
-                think_parts.append(text)
-                emit(ThinkDelta(turn_id=turn_id, text=text))
+                _emit_think_text(text)
             else:
                 answer_parts.append(text)
                 emit(AnswerDelta(turn_id=turn_id, text=text))

@@ -1,0 +1,38 @@
+{#-
+Minimal chat template for DeepSeek-R1-Distill-Qwen-32B-style GGUFs.
+
+Goals:
+- Minimal role-token formatting (no literal speaker prefixes).
+- Keep System/User/Assistant blocks explicit.
+- Sanitize assistant history: if an assistant message contains `</think>`, only replay the content after the final `</think>`.
+
+Notes:
+- This is a Jinja2 chat template intended for client-side application (HF-style / llama.cpp Jinja formatter).
+- It does not control whether the model "thinks"; it only affects what prior text is fed back into the next turn.
+-#}
+
+{%- set ns = namespace(system_prompt="") -%}
+{%- for message in messages -%}
+  {%- if message["role"] == "system" -%}
+    {%- set ns.system_prompt = message["content"] -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{{- bos_token -}}
+{%- if ns.system_prompt -%}
+<｜System｜>{{ ns.system_prompt }}<｜end▁of▁sentence｜>
+{%- endif -%}
+
+{%- for message in messages -%}
+  {%- if message["role"] == "user" -%}
+<｜User｜>{{ message["content"] }}<｜end▁of▁sentence｜>
+  {%- elif message["role"] == "assistant" and message.get("content") -%}
+    {%- set content = message["content"] -%}
+    {%- if "</think>" in content -%}
+      {%- set content = content.split("</think>")[-1] -%}
+    {%- endif -%}
+<｜Assistant｜>{{ content }}<｜end▁of▁sentence｜>
+  {%- endif -%}
+{%- endfor -%}
+
+<｜Assistant｜>

@@ -14,6 +14,7 @@ This folder stores short decision records (ADRs) for choices made while evolving
 | 0006 | Support streaming output and configurable think filtering | Add `--stream`, `--hide-think`, and `--strict-think-strip` controls. |
 | 0007 | Adopt model-first `models/` workspace | Organize notes/config/templates/prompts under `models/<model>/<backend>/...`. |
 | 0008 | TUI follow mode is intent-driven | Follow state changes only from explicit user scroll intent, not passive scroll-delta inference. |
+| 0009 | TUI slash commands are local-only and registry-driven | Provide in-TUI introspection without sending commands to the model. |
 
 ## Format
 

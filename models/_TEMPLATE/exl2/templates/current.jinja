@@ -1,0 +1,36 @@
+{#-
+EXL2 default chat template (minimal + safe).
+
+This is a generic fallback. Many EXL2 models ship a better chat template in
+`tokenizer_config.json` (field: `chat_template`). If `chat_template` is empty in config,
+the EXL2 backend will try that first.
+
+This template also sanitizes assistant history: if an assistant message contains `</think>`,
+only replay the content after the final `</think>` into the next prompt.
+-#}
+
+{%- set ns = namespace(system_prompt="") -%}
+{%- for message in messages -%}
+  {%- if message["role"] == "system" -%}
+    {%- set ns.system_prompt = message["content"] -%}
+  {%- endif -%}
+{%- endfor -%}
+
+{{- bos_token -}}
+{%- if ns.system_prompt -%}
+System: {{ ns.system_prompt }}
+{%- endif -%}
+
+{%- for message in messages -%}
+  {%- if message["role"] == "user" -%}
+User: {{ message["content"] }}
+  {%- elif message["role"] == "assistant" and message.get("content") -%}
+    {%- set content = message["content"] -%}
+    {%- if "</think>" in content -%}
+      {%- set content = content.split("</think>")[-1] -%}
+    {%- endif -%}
+Assistant: {{ content }}
+  {%- endif -%}
+{%- endfor -%}
+
+Assistant:
