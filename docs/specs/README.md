@@ -9,3 +9,4 @@ Implementation specs for features we plan to add (kept lightweight and pragmatic
 - `docs/specs/0005-gguf-chat-templates.md`: GGUF client-side chat templates (no rebuild) via llama.cpp handlers.
 - `docs/specs/0006-gguf-engine-knobs.md`: Expose GGUF engine knobs (batch/threads/RoPE/YARN).
 - `docs/specs/0007-exl2-backend.md`: Add ExLlamaV2 (EXL2) as a TUI backend (client-side templates).
+- `docs/specs/0008-reviews-branch-mirror.md`: Mirror PR review bot output into a dedicated `reviews` branch for local/offline consumption.

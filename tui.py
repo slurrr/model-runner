@@ -403,6 +403,9 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     args._cli_overrides = cli_overrides
     args._config_keys = set(defaults.keys())
+    early_backend = detect_backend(args.model_id, args.backend)
+    if early_backend == "gguf" and args.model_path and not args.model_id:
+        args.model_id = _resolve_path_maybe_relative(args.model_path, config_path=config_path)
     if not args.model_id:
         args.model_id = defaults.get("model_id")
     if not args.model_id:
@@ -416,7 +419,7 @@ def parse_args() -> argparse.Namespace:
     args._config_path = config_path
     if args.assume_think is None:
         args.assume_think = False
-    if args.backend == "gguf" and args.model_path:
+    if args.backend == "gguf" and args.model_path and not args.model_id:
         args.model_id = _resolve_path_maybe_relative(args.model_path, config_path=config_path)
     if args.backend == "exl2" and isinstance(args.model_id, str) and args.model_id.startswith("exl2:"):
         args.model_id = args.model_id.split(":", 1)[1]

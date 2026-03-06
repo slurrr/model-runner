@@ -15,6 +15,7 @@ This folder stores short decision records (ADRs) for choices made while evolving
 | 0007 | Adopt model-first `models/` workspace | Organize notes/config/templates/prompts under `models/<model>/<backend>/...`. |
 | 0008 | TUI follow mode is intent-driven | Follow state changes only from explicit user scroll intent, not passive scroll-delta inference. |
 | 0009 | TUI slash commands are local-only and registry-driven | Provide in-TUI introspection without sending commands to the model. |
+| 0010 | Mirror PR review output into a `reviews` branch | CI writes bot review bundles to an orphan `reviews` branch for local/offline reading. |
 
 ## Format
 

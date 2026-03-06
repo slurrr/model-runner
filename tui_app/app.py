@@ -358,6 +358,7 @@ class UnifiedTuiApp(App):
         self.pending_assistant: AssistantMessage | None = None
         self.pending_turn_id = 0
         self.is_generating = False
+        self.generation_thread: threading.Thread | None = None
         self.turn_records = []
         self.follow_output = True
         self._scroll_end_scheduled = False
@@ -411,6 +412,14 @@ class UnifiedTuiApp(App):
         if self._should_autofollow():
             self._request_scroll_end()
         self.notify("Generation stopped.", severity="information")
+
+    def _has_active_generation_worker(self) -> bool:
+        if self.generation_thread is None:
+            return False
+        if self.generation_thread.is_alive():
+            return True
+        self.generation_thread = None
+        return False
 
     def action_insert_newline(self):
         input_box = self.query_one("#chat-input", TextArea)
@@ -474,6 +483,9 @@ class UnifiedTuiApp(App):
         if self.is_generating:
             self.notify("Generation in progress. Wait for current turn to finish.")
             return
+        if self._has_active_generation_worker():
+            self.notify("Previous generation is still shutting down. Please wait a moment.")
+            return
         if text.lower() in {"exit", "quit"}:
             self.exit()
             return
@@ -505,6 +517,7 @@ class UnifiedTuiApp(App):
         input_box.load_text("")
 
         thread = threading.Thread(target=self._run_generation, args=(turn_id, list(self.messages)), daemon=True)
+        self.generation_thread = thread
         thread.start()
 
     async def _append_info(self, command: str, output: str):
