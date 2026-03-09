@@ -14,6 +14,7 @@ from jinja2 import Environment
 
 from tui_app.backends.base import EventEmitter
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnRecord, TurnStart
+from tui_app.log_file import FileLogger
 from tui_app.think_router import ThinkRouter
 
 
@@ -339,13 +340,29 @@ class _Exl2Runtime:
 class EXL2Session:
     backend_name = "exl2"
 
-    def __init__(self, runtime: _Exl2Runtime, args: argparse.Namespace, resolved_model_id: str):
+    def __init__(
+        self,
+        runtime: _Exl2Runtime,
+        args: argparse.Namespace,
+        resolved_model_id: str,
+        logger: FileLogger | None = None,
+    ):
         self.runtime = runtime
         self.args = args
         self.resolved_model_id = resolved_model_id
+        self.logger = logger
 
     def describe(self) -> dict[str, object]:
         return dict(self.runtime.backend_info)
+
+    def close(self) -> None:
+        if self.logger is not None:
+            self.logger.close()
+
+    def get_recent_logs(self, n: int = 80) -> list[str]:
+        if self.logger is None:
+            return []
+        return self.logger.get_recent_logs(n=n)
 
     def _build_settings(self):
         from exllamav2.generator import ExLlamaV2Sampler
@@ -365,6 +382,11 @@ class EXL2Session:
     def generate_turn(self, turn_id: int, messages: list[dict[str, str]], emit: EventEmitter) -> None:
         emit(TurnStart(turn_id=turn_id))
         started = time.time()
+        if self.logger is not None:
+            self.logger.log(
+                f"turn_start id={turn_id} messages={len(messages)} max_new_tokens={self.args.max_new_tokens} "
+                f"max_seq_len={self.args.max_seq_len}"
+            )
         router = ThinkRouter(assume_think=self.args.assume_think)
         stage = "init"
 
@@ -477,6 +499,8 @@ class EXL2Session:
                     emit(Meta(turn_id=turn_id, key="context_restarts", value=context_restarts))
 
         except Exception as exc:
+            if self.logger is not None:
+                self.logger.log(f"turn_error id={turn_id} stage={stage} error={exc}")
             emit(Error(turn_id=turn_id, message=f"{stage}: {exc}"))
             return
 
@@ -509,6 +533,11 @@ class EXL2Session:
             trimmed_messages=history_messages,
         )
         emit(Finish(turn_id=turn_id, record=record))
+        if self.logger is not None:
+            self.logger.log(
+                f"turn_finish id={turn_id} elapsed_s={record.timing.get('elapsed', 0):.3f} "
+                f"think_chars={len(record.think)} answer_chars={len(record.answer)}"
+            )
 
 
 def _parse_size_to_bytes(value: str, unit: str) -> int:
@@ -611,6 +640,7 @@ def _effective_attention_target(config, caps: dict[str, object]) -> str:
 
 
 def create_session(args: argparse.Namespace) -> EXL2Session:
+    logger = FileLogger.from_value(getattr(args, "exl2_log_file", ""), "exl2")
     model_dir = resolve_exl2_model_dir(
         args.model_id,
         model_path=getattr(args, "model_path", None),
@@ -622,6 +652,8 @@ def create_session(args: argparse.Namespace) -> EXL2Session:
             f"EXL2 model_dir not found: {model_dir} "
             "(set model_id to full path, or set model_path/exl2_repo_path to a base directory containing the model folder)"
         )
+    if logger is not None:
+        logger.log(f"session_init model_dir={model_dir}")
 
     try:
         _try_import_exllamav2(getattr(args, "exl2_repo_path", None))
@@ -748,4 +780,10 @@ def create_session(args: argparse.Namespace) -> EXL2Session:
             "sdpa_available": caps.get("sdpa_available"),
         })(_query_attention_capabilities()),
     )
-    return EXL2Session(runtime=runtime, args=args, resolved_model_id=model_dir)
+    if logger is not None:
+        logger.log(
+            "attention_runtime="
+            f"{runtime.backend_info.get('attention_backend_runtime')} "
+            f"attention_effective={runtime.backend_info.get('attention_backend_effective')}"
+        )
+    return EXL2Session(runtime=runtime, args=args, resolved_model_id=model_dir, logger=logger)

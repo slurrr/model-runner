@@ -27,6 +27,7 @@ build/
 *.log
 transcripts/
 outputs/
+config/machine.toml
 
 # Model files (keep weights out of git if they ever land here)
 *.safetensors

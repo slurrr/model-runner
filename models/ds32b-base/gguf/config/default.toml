@@ -1,0 +1,42 @@
+[model]
+id = "ds32b-base"
+
+[gen]
+max_new_tokens = 2048
+min_p = 0.03
+repetition_penalty = 1.08
+stream = true
+temperature = 0.7
+top_k = 80
+top_p = 0.95
+
+[prompt]
+chat_template = ""
+prompt_mode = "chat"
+system = ""
+system_file = "models/ds32b-base/gguf/prompts/system.txt"
+user_prefix = "Respond to this graphically as Alex. "
+
+[ui]
+assume_think = false
+no_animate_thinking = false
+save_transcript = ""
+capture_last_request = false
+scroll_lines = 9
+show_thinking = false
+ui_max_events_per_tick = 60
+ui_tick_ms = 33
+
+[backend.gguf]
+model_path = "/mnt/d/AI/Local Models/lmstudio-community/DeepSeek-R1-Distill-Qwen-32B-GGUF/DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf"
+log_file = ""
+n_ctx = 24576
+n_gpu_layers = -1
+rope_freq_base = 0.0
+rope_freq_scale = 0.0
+rope_scaling_type = -1
+yarn_attn_factor = 1.0
+yarn_beta_fast = 32.0
+yarn_beta_slow = 1.0
+yarn_ext_factor = -1.0
+yarn_orig_ctx = 0

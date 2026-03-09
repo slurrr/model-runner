@@ -1,0 +1,27 @@
+[gen]
+# Leave model/prompt/ui in base `default.toml`; this profile focuses on context capacity.
+max_new_tokens = 1024
+
+[backend.vllm]
+# Large-context profile philosophy:
+# - Reserve more VRAM for KV (gpu_memory_utilization + higher max_model_len).
+# - Keep swap-space=0 so it's VRAM-only ("fits or fails").
+extra_args = [
+  "--swap-space", "0",
+  "--max-num-seqs", "1",
+  "--enable-chunked-prefill",
+  "--long-prefill-token-threshold", "2048",
+  "--max-num-batched-tokens", "8192",
+  "--stream-interval", "4",
+  "--enable-prefix-caching",
+  "--kv-cache-dtype", "auto",
+  "--block-size", "16",
+  # If you want to hard-cap KV cache size instead of using gpu_memory_utilization:
+  # "--kv-cache-memory-bytes", "16G",
+  "--disable-log-stats",
+  "--no-enable-log-requests",
+  "--disable-uvicorn-access-log",
+]
+gpu_memory_utilization = 0.96
+max_model_len = 32768
+

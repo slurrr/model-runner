@@ -32,7 +32,13 @@ class SlashCommand:
     aliases: tuple[str, ...] = ()
     read_only: bool = True
     examples: tuple[str, ...] = ()
-    include_in_help: bool = True
+    hidden: bool = False
+
+
+@dataclass
+class ShowOptions:
+    verbose: bool = False
+    as_json: bool = False
 
 
 @dataclass
@@ -91,12 +97,18 @@ def resolve_path_maybe_relative(path: str, config_path: str | None = None) -> st
 
 
 class UserMessage(Static):
-    def __init__(self, text: str):
+    def __init__(self, text: str, images: list[str] | None = None):
         super().__init__(classes="user-message")
         self.text = text
+        self.images = images or []
 
     def on_mount(self):
-        self.update(Text(f"You: {self.text}", style="white"))
+        body = Text(f"You: {self.text}", style="white")
+        if self.images:
+            names = ", ".join(os.path.basename(p) for p in self.images[:6])
+            suffix = "" if len(self.images) <= 6 else f" (+{len(self.images) - 6} more)"
+            body.append(f"\nImages: {names}{suffix}", style="grey70")
+        self.update(body)
 
 
 class InfoMessage(Static):
@@ -350,9 +362,10 @@ class UnifiedTuiApp(App):
     def __init__(self, runtime: TuiRuntime):
         super().__init__()
         self.runtime = runtime
-        self.messages: list[dict[str, str]] = []
+        self.messages: list[dict[str, object]] = []
         if runtime.args.system:
             self.messages.append({"role": "system", "content": runtime.args.system})
+        self.pending_images: list[str] = []
 
         self.event_queue: queue.Queue = queue.Queue()
         self.pending_assistant: AssistantMessage | None = None
@@ -366,6 +379,7 @@ class UnifiedTuiApp(App):
         self.registry = SlashRegistry()
         self.show_topics: dict[str, ShowTopic] = {}
         self.show_aliases: dict[str, str] = {}
+        self._active_show_opts: ShowOptions | None = None
         self._register_show_topics()
         self._register_commands()
 
@@ -471,7 +485,7 @@ class UnifiedTuiApp(App):
     async def action_submit_prompt(self):
         input_box = self.query_one("#chat-input", TextArea)
         text = input_box.text.strip()
-        if not text:
+        if not text and not self.pending_images:
             input_box.load_text("")
             return
         if text.startswith("//"):
@@ -492,14 +506,25 @@ class UnifiedTuiApp(App):
         if text.lower() == "clear":
             self.transcript.remove_children()
             self.messages = []
+            self.pending_images.clear()
             if self.runtime.args.system:
                 self.messages.append({"role": "system", "content": self.runtime.args.system})
             input_box.load_text("")
             return
 
-        user_text = f"{self.runtime.args.user_prefix}{text}" if self.runtime.args.user_prefix else text
-        self.messages.append({"role": "user", "content": user_text})
-        await self.transcript.mount(UserMessage(text))
+        if text:
+            user_text = f"{self.runtime.args.user_prefix}{text}" if self.runtime.args.user_prefix else text
+        else:
+            user_text = ""
+
+        message: dict[str, object] = {"role": "user", "content": user_text}
+        images = None
+        if self.pending_images:
+            images = list(self.pending_images)
+            message["images"] = images
+            self.pending_images.clear()
+        self.messages.append(message)
+        await self.transcript.mount(UserMessage(text or "(image)", images=images))
 
         assistant = AssistantMessage(
             start_expanded=self.runtime.args.show_thinking,
@@ -565,8 +590,34 @@ class UnifiedTuiApp(App):
             output = "(No output)"
         await self._append_info(raw_text, output)
 
+    def _show_opts(self) -> ShowOptions:
+        return self._active_show_opts or ShowOptions()
+
+    def _to_json_or_lines(self, data: dict, lines: list[str]) -> str:
+        if self._show_opts().as_json:
+            return json.dumps(data, indent=2, ensure_ascii=False, default=str)
+        return "\n".join(lines)
+
+    def _parse_show_flags(self, argv: list[str]) -> tuple[list[str], ShowOptions, str | None]:
+        opts = ShowOptions()
+        rest: list[str] = []
+        idx = 0
+        while idx < len(argv):
+            token = argv[idx]
+            if token in {"--verbose", "-v"}:
+                opts.verbose = True
+            elif token == "--json":
+                opts.as_json = True
+            elif token in {"--help", "-h", "?"}:
+                return [], opts, "help"
+            else:
+                rest.append(token)
+            idx += 1
+        return rest, opts, None
+
     def _register_show_topics(self):
         topics = [
+            ShowTopic("status", "Concise runtime summary", "/show status", UnifiedTuiApp._show_status),
             ShowTopic("session", "Session/backend state", "/show session", UnifiedTuiApp._show_session),
             ShowTopic("prompt", "Prompt-related settings", "/show prompt", UnifiedTuiApp._show_prompt),
             ShowTopic("gen", "Effective generation settings", "/show gen", UnifiedTuiApp._show_gen),
@@ -580,10 +631,13 @@ class UnifiedTuiApp(App):
             ShowTopic("config", "Loaded config path", "/show config", UnifiedTuiApp._show_config),
             ShowTopic("backend", "Backend details", "/show backend", UnifiedTuiApp._show_backend),
             ShowTopic("aliases", "Alias map for slash commands/topics", "/show aliases", UnifiedTuiApp._show_aliases),
+            ShowTopic("logs", "Recent backend logs", "/show logs [--n N] [--filter TEXT]", UnifiedTuiApp._show_logs),
+            ShowTopic("request", "Last captured request payload (sanitized)", "/show request", UnifiedTuiApp._show_request),
         ]
         self.show_topics = {topic.name: topic for topic in topics}
         self.show_aliases = {
             "session": "session",
+            "status": "status",
             "prompt": "prompt",
             "gen": "gen",
             "ui": "ui",
@@ -596,6 +650,8 @@ class UnifiedTuiApp(App):
             "config": "config",
             "backend": "backend",
             "aliases": "aliases",
+            "logs": "logs",
+            "request": "request",
         }
 
     def _register_commands(self):
@@ -620,6 +676,14 @@ class UnifiedTuiApp(App):
         )
         self.registry.register(
             SlashCommand(
+                name="status",
+                summary="Concise runtime summary",
+                usage="/status",
+                handler=UnifiedTuiApp._cmd_status,
+            )
+        )
+        self.registry.register(
+            SlashCommand(
                 name="system",
                 summary="Show active system prompt and source",
                 usage="/system",
@@ -634,14 +698,39 @@ class UnifiedTuiApp(App):
                 handler=UnifiedTuiApp._cmd_prefix,
             )
         )
-        for alias_name in ("model", "config", "env", "files", "session", "prompt", "gen", "ui", "args", "history", "last", "backend"):
+        self.registry.register(
+            SlashCommand(
+                name="image",
+                aliases=("img",),
+                summary="Attach an image to the next prompt (HF vision models only)",
+                usage="/image <path> | /image list | /image clear",
+                handler=UnifiedTuiApp._cmd_image,
+                examples=("/image ./pic.png", "/img list", "/image clear"),
+            )
+        )
+        for alias_name in (
+            "model",
+            "config",
+            "env",
+            "files",
+            "session",
+            "prompt",
+            "gen",
+            "ui",
+            "args",
+            "history",
+            "last",
+            "backend",
+            "logs",
+            "request",
+        ):
             self.registry.register(
                 SlashCommand(
                     name=alias_name,
                     summary=f"Alias for /show {alias_name}",
                     usage=f"/{alias_name}",
-                    handler=lambda app, argv, topic=alias_name: app._cmd_show([topic]),
-                    include_in_help=False,
+                    handler=lambda app, argv, topic=alias_name: app._cmd_show([topic, *argv]),
+                    hidden=True,
                 )
             )
         self.registry.register(
@@ -667,12 +756,19 @@ class UnifiedTuiApp(App):
         if not argv:
             lines = ["Available commands:"]
             for cmd in self.registry.all_commands():
-                if not cmd.include_in_help:
+                if cmd.hidden:
                     continue
                 lines.append(f"/{cmd.name}: {cmd.summary}")
             lines.append("")
+            lines.append("Use /help --all to include hidden aliases.")
             lines.append("Try: /help <command>")
             lines.append("Alias map: /show aliases")
+            return "\n".join(lines)
+        if argv[0] in {"--all", "aliases"}:
+            lines = ["All commands (including hidden aliases):"]
+            for cmd in self.registry.all_commands():
+                hidden = " [hidden]" if cmd.hidden else ""
+                lines.append(f"/{cmd.name}{hidden}: {cmd.summary}")
             return "\n".join(lines)
 
         target = argv[0].lstrip("/").lower()
@@ -700,8 +796,12 @@ class UnifiedTuiApp(App):
     def _cmd_show(self, argv: list[str]) -> str:
         if not argv:
             lines = [
-                "Usage: /show <topic>",
-                "Topics: " + ", ".join(sorted(self.show_topics.keys())),
+                "Usage: /show <topic> [--verbose] [--json]",
+                "Use /status for a concise summary.",
+                "Topics:",
+                "  core: status, session, model, backend",
+                "  generation: gen, prompt, request, logs",
+                "  runtime: ui, history, last, files, env, config, aliases, args",
                 "Examples:",
                 "  /show session",
                 "  /show gen",
@@ -709,6 +809,7 @@ class UnifiedTuiApp(App):
             ]
             return "\n".join(lines)
         topic = argv[0].lower()
+        parsed_argv, show_opts, parse_err = self._parse_show_flags(argv[1:])
         if topic in {"?", "--help"}:
             return self._cmd_show([])
         topic_key = self.show_aliases.get(topic, topic)
@@ -719,9 +820,27 @@ class UnifiedTuiApp(App):
             if matches:
                 msg += "\nDid you mean: " + ", ".join(matches)
             return msg
-        if len(argv) > 1 and argv[1] in {"?", "--help"}:
+        if parse_err == "help":
             return f"{handler.usage}\n{handler.summary}"
-        return handler.handler(self, argv[1:])
+        if parse_err:
+            return parse_err
+        if parsed_argv and parsed_argv[0] in {"?", "--help"}:
+            return f"{handler.usage}\n{handler.summary}"
+        if show_opts.as_json and topic_key == "logs":
+            return "Topic 'logs' does not support --json."
+        self._active_show_opts = show_opts
+        try:
+            return handler.handler(self, parsed_argv)
+        finally:
+            self._active_show_opts = None
+
+    def _cmd_status(self, argv: list[str]) -> str:
+        del argv
+        self._active_show_opts = ShowOptions(verbose=False, as_json=False)
+        try:
+            return self._show_status([])
+        finally:
+            self._active_show_opts = None
 
     def _cmd_system(self, argv: list[str]) -> str:
         del argv
@@ -758,10 +877,47 @@ class UnifiedTuiApp(App):
         ]
         return "\n".join(lines)
 
+    def _cmd_image(self, argv: list[str]) -> str:
+        backend = self.runtime.session.backend_name
+        if backend not in {"hf", "openai", "vllm"}:
+            return f"Images are only supported on HF and OpenAI-compatible backends (current backend={backend})."
+
+        if not argv:
+            return "\n".join(
+                [
+                    "Usage:",
+                    "  /image <path>        Attach an image file to the next user message",
+                    "  /image list          Show pending image attachments",
+                    "  /image clear         Clear pending image attachments",
+                ]
+            )
+
+        sub = argv[0].strip().lower()
+        if sub in {"list", "ls"}:
+            if not self.pending_images:
+                return "(No pending images.)"
+            lines = ["Pending images:"]
+            for idx, path in enumerate(self.pending_images, start=1):
+                lines.append(f"{idx}. {path}")
+            return "\n".join(lines)
+
+        if sub in {"clear", "reset"}:
+            count = len(self.pending_images)
+            self.pending_images.clear()
+            return f"Cleared {count} pending image(s)."
+
+        raw_path = " ".join(argv).strip()
+        path = resolve_path_maybe_relative(raw_path, config_path=self.runtime.args._config_path)
+        if not os.path.isfile(path):
+            return f"Not found: {path}"
+        self.pending_images.append(path)
+        return f"Attached: {path}\n(Will be sent with the next message.)"
+
     def _cmd_clear(self, argv: list[str]) -> str:
         del argv
         self.transcript.remove_children()
         self.messages = []
+        self.pending_images.clear()
         if self.runtime.args.system:
             self.messages.append({"role": "system", "content": self.runtime.args.system})
         self.pending_assistant = None
@@ -772,22 +928,135 @@ class UnifiedTuiApp(App):
         self.exit()
         return "Exiting."
 
+    def _backend_summary_line(self) -> str:
+        session = self.runtime.session
+        describe = getattr(session, "describe", None)
+        if not callable(describe):
+            return "(unavailable)"
+        info = describe()
+        if not isinstance(info, dict):
+            return str(info)
+        backend = session.backend_name
+        if backend == "vllm":
+            return (
+                f"managed={info.get('managed_mode')} pid={info.get('pid')} "
+                f"base_url={info.get('base_url')} model={info.get('model_id')}"
+            )
+        if backend == "openai":
+            return f"base_url={info.get('base_url')} model={info.get('model_id')}"
+        if backend == "ollama":
+            return f"model={session.resolved_model_id}"
+        return ", ".join(f"{k}={info[k]}" for k in sorted(info.keys()))
+
+    def _show_status(self, argv: list[str]) -> str:
+        del argv
+        args = self.runtime.args
+        session = self.runtime.session
+        profile = getattr(args, "_config_profile", "") or ""
+        data = {
+            "backend": session.backend_name,
+            "model": session.resolved_model_id,
+            "config_path": args._config_path or "(none)",
+            "profile": profile or "(none)",
+            "generating": bool(self.is_generating),
+            "follow_output": bool(self.follow_output),
+            "pending_images": len(self.pending_images),
+            "gen": {
+                "max_new_tokens": args.max_new_tokens,
+                "temperature": args.temperature,
+                "top_p": args.top_p,
+                "top_k": args.top_k if args.top_k is not None else "deferred/default",
+            },
+            "backend_summary": self._backend_summary_line(),
+        }
+        logs_fn = getattr(session, "get_recent_logs", None)
+        if callable(logs_fn):
+            try:
+                data["log_tail_available"] = len(logs_fn(1)) > 0
+            except Exception:
+                data["log_tail_available"] = False
+        if self.turn_records:
+            last = self.turn_records[-1]
+            data["last_turn"] = {
+                "elapsed_s": last.timing.get("elapsed"),
+                "ended_in_think": bool(last.ended_in_think),
+                "len_raw": len(last.raw),
+                "len_think": len(last.think),
+                "len_answer": len(last.answer),
+            }
+        else:
+            data["last_turn"] = "(none)"
+        lines = [
+            f"backend: {data['backend']}",
+            f"model: {data['model']}",
+            f"config: {data['config_path']} (profile={data['profile']})",
+            f"generating: {str(data['generating']).lower()}",
+            f"follow_output: {str(data['follow_output']).lower()}",
+            f"pending_images: {data['pending_images']}",
+            "gen:",
+            f"  max_new_tokens: {data['gen']['max_new_tokens']}",
+            f"  temperature: {data['gen']['temperature']}",
+            f"  top_p: {data['gen']['top_p']}",
+            f"  top_k: {data['gen']['top_k']}",
+            f"backend_summary: {data['backend_summary']}",
+            f"log_tail_available: {data.get('log_tail_available', False)}",
+        ]
+        if isinstance(data["last_turn"], dict):
+            lt = data["last_turn"]
+            lines.extend(
+                [
+                    "last_turn:",
+                    f"  elapsed_s: {lt['elapsed_s']}",
+                    f"  ended_in_think: {lt['ended_in_think']}",
+                    f"  len_raw: {lt['len_raw']}",
+                    f"  len_think: {lt['len_think']}",
+                    f"  len_answer: {lt['len_answer']}",
+                ]
+            )
+        else:
+            lines.append("last_turn: (none)")
+        return self._to_json_or_lines(data, lines)
+
     def _show_session(self, argv: list[str]) -> str:
         del argv
+        status_data = {}
+        if self._show_opts().as_json:
+            try:
+                status_data = json.loads(self._show_status([]))
+            except Exception:
+                status_data = {}
+        data = {
+            "backend": self.runtime.session.backend_name,
+            "model_id": self.runtime.session.resolved_model_id,
+            "config_path": self.runtime.args._config_path or "(none)",
+            "is_generating": bool(self.is_generating),
+            "follow_output": bool(self.follow_output),
+            "transcript_widgets": len(self.transcript.children),
+            "scroll_y": float(self.transcript.scroll_y),
+            "max_scroll_y": float(self.transcript.max_scroll_y),
+            "status": status_data if status_data else None,
+        }
         lines = [
-            f"backend: {self.runtime.session.backend_name}",
-            f"model_id: {self.runtime.session.resolved_model_id}",
-            f"config_path: {self.runtime.args._config_path or '(none)'}",
-            f"is_generating: {self.is_generating}",
-            f"follow_output: {self.follow_output}",
-            f"transcript_widgets: {len(self.transcript.children)}",
-            f"scroll_y: {float(self.transcript.scroll_y):.1f}/{float(self.transcript.max_scroll_y):.1f}",
+            f"backend: {data['backend']}",
+            f"model_id: {data['model_id']}",
+            f"config_path: {data['config_path']}",
+            f"is_generating: {data['is_generating']}",
+            f"follow_output: {data['follow_output']}",
+            f"transcript_widgets: {data['transcript_widgets']}",
+            f"scroll_y: {data['scroll_y']:.1f}/{data['max_scroll_y']:.1f}",
         ]
-        return "\n".join(lines)
+        if self._show_opts().verbose:
+            lines.append(f"pending_images: {len(self.pending_images)}")
+            lines.append(f"backend_summary: {self._backend_summary_line()}")
+        return self._to_json_or_lines(data, lines)
 
     def _show_prompt(self, argv: list[str]) -> str:
         del argv
-        return self._cmd_system([]) + "\n" + self._cmd_prefix([])
+        data = {
+            "system": self._cmd_system([]),
+            "prefix": self._cmd_prefix([]),
+        }
+        return self._to_json_or_lines(data, [data["system"], data["prefix"]])
 
     def _show_gen(self, argv: list[str]) -> str:
         del argv
@@ -796,6 +1065,7 @@ class UnifiedTuiApp(App):
         cli_overrides = set(getattr(args, "_cli_overrides", set()) or set())
         config_keys = set(getattr(args, "_config_keys", set()) or set())
         user_set = cli_overrides | config_keys
+        ignored: list[str] = []
 
         if backend == "hf":
             keys = [
@@ -843,10 +1113,6 @@ class UnifiedTuiApp(App):
                 "typical_p",
                 "repetition_penalty",
                 "stop_strings",
-                "n_ctx",
-                "n_gpu_layers",
-                "prompt_mode",
-                "chat_template",
             ]
             sent = {
                 "max_tokens": args.max_new_tokens,
@@ -885,12 +1151,6 @@ class UnifiedTuiApp(App):
                 "frequency_penalty",
                 "presence_penalty",
                 "stop_strings",
-                "max_seq_len",
-                "min_free_tokens",
-                "gpu_split",
-                "cache_type",
-                "exl2_stop_tokens",
-                "exl2_repeat_streak_max",
             ]
             sent = {
                 "max_new_tokens": args.max_new_tokens,
@@ -902,22 +1162,156 @@ class UnifiedTuiApp(App):
                 "repetition_penalty": args.repetition_penalty,
                 "frequency_penalty": (args.frequency_penalty or 0.0),
                 "presence_penalty": (args.presence_penalty or 0.0),
-                "max_seq_len": args.max_seq_len,
-                "min_free_tokens": args.min_free_tokens,
-                "cache_type": args.cache_type,
-                "exl2_repeat_streak_max": args.exl2_repeat_streak_max,
             }
             deferred = []
             if args.stop_strings:
                 sent["stop_strings"] = args.stop_strings
-            if args.exl2_stop_tokens:
-                sent["exl2_stop_tokens"] = args.exl2_stop_tokens
+            if not args.stop_strings:
+                deferred.append("stop_strings")
+        elif backend == "openai":
+            keys = [
+                "max_new_tokens",
+                "temperature",
+                "top_p",
+                "stop_strings",
+                "seed",
+            ]
+            sent = {
+                "max_tokens": args.max_new_tokens,
+                "temperature": args.temperature,
+                "top_p": args.top_p,
+            }
+            deferred = []
+            ignored = []
+            if args.stop_strings:
+                sent["stop"] = args.stop_strings
             else:
-                deferred.append("exl2_stop_tokens(auto:<end_of_turn>,<start_of_turn>,eos)")
-            if args.gpu_split and args.gpu_split != "auto":
-                sent["gpu_split"] = args.gpu_split
+                deferred.append("stop_strings")
+            if args.seed is not None:
+                sent["seed"] = args.seed
             else:
-                deferred.append("gpu_split(full single-GPU load)")
+                deferred.append("seed")
+            for k in ("top_k", "min_p", "typical_p", "repetition_penalty", "presence_penalty", "frequency_penalty"):
+                if getattr(args, k, None) not in (None, 1.0):
+                    ignored.append(k)
+        elif backend == "vllm":
+            keys = [
+                "max_new_tokens",
+                "temperature",
+                "top_p",
+                "top_k",
+                "min_p",
+                "repetition_penalty",
+                "presence_penalty",
+                "frequency_penalty",
+                "stop_strings",
+                "stop_token_ids",
+                "ignore_eos",
+                "min_tokens",
+                "seed",
+                "best_of",
+                "use_beam_search",
+                "length_penalty",
+                "include_stop_str_in_output",
+                "skip_special_tokens",
+                "spaces_between_special_tokens",
+                "truncate_prompt_tokens",
+                "allowed_token_ids",
+                "prompt_logprobs",
+            ]
+            sent = {
+                "max_tokens": args.max_new_tokens,
+                "temperature": args.temperature,
+                "top_p": args.top_p,
+            }
+            deferred = []
+            ignored = []
+            if args.top_k not in (None, -1):
+                sent["top_k"] = args.top_k
+            else:
+                deferred.append("top_k")
+            if args.min_p not in (None, 0.0):
+                sent["min_p"] = args.min_p
+            else:
+                deferred.append("min_p")
+            if args.ignore_eos is True:
+                sent["ignore_eos"] = args.ignore_eos
+            else:
+                deferred.append("ignore_eos")
+            if args.min_tokens not in (None, 0):
+                sent["min_tokens"] = args.min_tokens
+            else:
+                deferred.append("min_tokens")
+            if args.best_of not in (None, 1):
+                sent["best_of"] = args.best_of
+            else:
+                deferred.append("best_of")
+            if args.use_beam_search is True:
+                sent["use_beam_search"] = args.use_beam_search
+            else:
+                deferred.append("use_beam_search")
+            if args.length_penalty not in (None, 1.0):
+                sent["length_penalty"] = args.length_penalty
+            else:
+                deferred.append("length_penalty")
+            if args.include_stop_str_in_output is True:
+                sent["include_stop_str_in_output"] = args.include_stop_str_in_output
+            else:
+                deferred.append("include_stop_str_in_output")
+            if args.skip_special_tokens is False:
+                sent["skip_special_tokens"] = args.skip_special_tokens
+            else:
+                deferred.append("skip_special_tokens")
+            if args.spaces_between_special_tokens is False:
+                sent["spaces_between_special_tokens"] = args.spaces_between_special_tokens
+            else:
+                deferred.append("spaces_between_special_tokens")
+            if args.truncate_prompt_tokens not in (None, 0):
+                sent["truncate_prompt_tokens"] = args.truncate_prompt_tokens
+            else:
+                deferred.append("truncate_prompt_tokens")
+            if args.prompt_logprobs not in (None, 0):
+                sent["prompt_logprobs"] = args.prompt_logprobs
+            else:
+                deferred.append("prompt_logprobs")
+            if args.stop_token_ids:
+                sent["stop_token_ids"] = args.stop_token_ids
+            else:
+                deferred.append("stop_token_ids")
+            if args.allowed_token_ids:
+                sent["allowed_token_ids"] = args.allowed_token_ids
+            else:
+                deferred.append("allowed_token_ids")
+            if args.stop_strings:
+                sent["stop"] = args.stop_strings
+            else:
+                deferred.append("stop_strings")
+            if args.repetition_penalty not in (None, 1.0):
+                sent["repetition_penalty"] = args.repetition_penalty
+            else:
+                deferred.append("repetition_penalty")
+            if args.presence_penalty not in (None, 0.0):
+                sent["presence_penalty"] = args.presence_penalty
+            else:
+                deferred.append("presence_penalty")
+            if args.frequency_penalty not in (None, 0.0):
+                sent["frequency_penalty"] = args.frequency_penalty
+            else:
+                deferred.append("frequency_penalty")
+            if args.seed is not None:
+                sent["seed"] = args.seed
+            else:
+                deferred.append("seed")
+            for k in ("typical_p", "max_time"):
+                if getattr(args, k, None) is not None:
+                    ignored.append(k)
+            if args.num_beams not in (None, 1):
+                ignored.append("num_beams")
+            if args.no_repeat_ngram_size not in (None, 0):
+                ignored.append("no_repeat_ngram_size")
+            for k in ("use_8bit", "use_4bit"):
+                if getattr(args, k, None):
+                    ignored.append(k)
         else:
             keys = ["max_new_tokens", "temperature", "top_p", "top_k", "stop_strings", "ollama_think"]
             sent = {}
@@ -947,35 +1341,43 @@ class UnifiedTuiApp(App):
             if "think" not in sent:
                 deferred.append("ollama_think(auto)")
 
-        args_block = {key: getattr(args, key, None) for key in keys}
-        lines = [
-            "args.*",
-            *[f"  {k}: {args_block[k]!r}" for k in keys],
-            "sent.*",
-        ]
+        lines = ["sent.*"]
         if sent:
             lines.extend([f"  {k}: {v!r}" for k, v in sent.items()])
         else:
             lines.append("  (none)")
-        lines.append("deferred")
-        if deferred:
-            lines.extend([f"  {k}" for k in deferred])
-        else:
-            lines.append("  (none)")
-        return "\n".join(lines)
+        data = {
+            "sent": sent,
+            "deferred": deferred,
+            "ignored": ignored,
+        }
+        if self._show_opts().verbose:
+            lines.append("deferred")
+            if deferred:
+                lines.extend([f"  {k}" for k in deferred])
+            else:
+                lines.append("  (none)")
+            lines.append("ignored")
+            if ignored:
+                lines.extend([f"  {k}" for k in ignored])
+            else:
+                lines.append("  (none)")
+        return self._to_json_or_lines(data, lines)
 
     def _show_ui(self, argv: list[str]) -> str:
         del argv
         args = self.runtime.args
-        lines = [
-            f"show_thinking: {args.show_thinking}",
-            f"no_animate_thinking: {args.no_animate_thinking}",
-            f"scroll_lines: {args.scroll_lines}",
-            f"ui_tick_ms: {args.ui_tick_ms}",
-            f"ui_max_events_per_tick: {args.ui_max_events_per_tick}",
-            f"follow_output: {self.follow_output}",
-        ]
-        return "\n".join(lines)
+        data = {
+            "show_thinking": args.show_thinking,
+            "no_animate_thinking": args.no_animate_thinking,
+            "scroll_lines": args.scroll_lines,
+            "ui_tick_ms": args.ui_tick_ms,
+            "ui_max_events_per_tick": args.ui_max_events_per_tick,
+            "follow_output": self.follow_output,
+            "capture_last_request": bool(getattr(args, "capture_last_request", False)),
+        }
+        lines = [f"{k}: {v}" for k, v in data.items()]
+        return self._to_json_or_lines(data, lines)
 
     def _show_args(self, argv: list[str]) -> str:
         del argv
@@ -983,81 +1385,118 @@ class UnifiedTuiApp(App):
         for key, value in vars(self.runtime.args).items():
             if key.startswith("_"):
                 continue
-            data[key] = value
-        return json.dumps(data, indent=2, ensure_ascii=False, default=str)
+            if key.endswith("api_key") or key == "api_key":
+                data[key] = "***" if value else value
+            else:
+                data[key] = value
+        lines = [f"{k}: {data[k]!r}" for k in sorted(data.keys())]
+        return self._to_json_or_lines(data, lines)
 
     def _show_history(self, argv: list[str]) -> str:
         del argv
         roles = [msg.get("role", "?") for msg in self.messages[-10:]]
-        lines = [
-            f"turn_records: {len(self.turn_records)}",
-            f"messages: {len(self.messages)}",
-            f"last_roles(10): {roles}",
-        ]
-        return "\n".join(lines)
+        data = {
+            "turn_records": len(self.turn_records),
+            "messages": len(self.messages),
+            "last_roles_10": roles,
+        }
+        lines = [f"{k}: {v}" for k, v in data.items()]
+        return self._to_json_or_lines(data, lines)
 
     def _show_last(self, argv: list[str]) -> str:
         del argv
         if not self.turn_records:
             return "No completed turns yet."
         last = self.turn_records[-1]
-        lines = [
-            f"backend: {last.backend}",
-            f"model_id: {last.model_id}",
-            f"ended_in_think: {last.ended_in_think}",
-            f"timing.elapsed: {last.timing.get('elapsed')}",
-            f"len(raw): {len(last.raw)}",
-            f"len(think): {len(last.think)}",
-            f"len(answer): {len(last.answer)}",
-        ]
-        return "\n".join(lines)
+        data = {
+            "backend": last.backend,
+            "model_id": last.model_id,
+            "ended_in_think": last.ended_in_think,
+            "elapsed": last.timing.get("elapsed"),
+            "len_raw": len(last.raw),
+            "len_think": len(last.think),
+            "len_answer": len(last.answer),
+        }
+        lines = [f"{k}: {v}" for k, v in data.items()]
+        if self._show_opts().verbose:
+            data["raw"] = last.raw
+            data["think"] = last.think
+            data["answer"] = last.answer
+            lines.extend(["", "raw:", last.raw, "", "think:", last.think, "", "answer:", last.answer])
+        return self._to_json_or_lines(data, lines)
 
     def _show_env(self, argv: list[str]) -> str:
         del argv
-        lines = [
-            f"OLLAMA_HOST: {os.environ.get('OLLAMA_HOST', '(unset)')}",
-            f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES', '(unset)')}",
-        ]
-        return "\n".join(lines)
+        data = {
+            "OLLAMA_HOST": os.environ.get("OLLAMA_HOST", "(unset)"),
+            "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES", "(unset)"),
+            "OPENAI_API_KEY": "***" if os.environ.get("OPENAI_API_KEY") else "(unset)",
+        }
+        lines = [f"{k}: {v}" for k, v in data.items()]
+        return self._to_json_or_lines(data, lines)
 
     def _show_files(self, argv: list[str]) -> str:
         del argv
         args = self.runtime.args
-        lines = [f"config_path: {args._config_path or '(none)'}"]
+        data = {"config_path": args._config_path or "(none)"}
+        lines = [f"config_path: {data['config_path']}"]
         if args.system_file:
-            lines.append(
-                f"system_file: {resolve_path_maybe_relative(args.system_file, config_path=args._config_path)}"
-            )
+            data["system_file"] = resolve_path_maybe_relative(args.system_file, config_path=args._config_path)
+            lines.append(f"system_file: {data['system_file']}")
         else:
+            data["system_file"] = "(none)"
             lines.append("system_file: (none)")
         if args.save_transcript:
-            lines.append(
-                f"save_transcript: {resolve_path_maybe_relative(args.save_transcript, config_path=args._config_path)}"
-            )
+            data["save_transcript"] = resolve_path_maybe_relative(args.save_transcript, config_path=args._config_path)
+            lines.append(f"save_transcript: {data['save_transcript']}")
         else:
+            data["save_transcript"] = "(none)"
             lines.append("save_transcript: (none)")
-        return "\n".join(lines)
+        return self._to_json_or_lines(data, lines)
 
     def _show_model(self, argv: list[str]) -> str:
         del argv
-        return "\n".join(
-            [
-                f"backend: {self.runtime.session.backend_name}",
-                f"model_id: {self.runtime.session.resolved_model_id}",
-            ]
-        )
+        data = {
+            "backend": self.runtime.session.backend_name,
+            "model_id": self.runtime.session.resolved_model_id,
+        }
+        lines = [f"backend: {data['backend']}", f"model_id: {data['model_id']}"]
+        return self._to_json_or_lines(data, lines)
 
     def _show_config(self, argv: list[str]) -> str:
         del argv
-        return f"config_path: {self.runtime.args._config_path or '(none)'}"
+        args = self.runtime.args
+        data = {"config_path": args._config_path or "(none)"}
+        lines = [f"config_path: {data['config_path']}"]
+        profile = getattr(args, "_config_profile", "") or ""
+        data["profile"] = profile or "(none)"
+        lines.append(f"profile: {data['profile']}")
+        loaded = list(getattr(args, "_config_layers", []) or [])
+        data["loaded_files"] = loaded
+        if loaded:
+            lines.append("loaded_files:")
+            for path in loaded:
+                lines.append(f"  - {path}")
+        else:
+            lines.append("loaded_files: (none)")
+        origins = dict(getattr(args, "_config_origins", {}) or {})
+        data["origins"] = origins
+        lines.append("origins:")
+        if origins:
+            for key in sorted(origins.keys()):
+                lines.append(f"  {key}: {origins[key]}")
+        else:
+            lines.append("  (none)")
+        return self._to_json_or_lines(data, lines)
 
     def _show_backend(self, argv: list[str]) -> str:
         del argv
         session = self.runtime.session
-        lines = [
-            f"backend: {session.backend_name}",
-            f"resolved_model_id: {session.resolved_model_id}",
-        ]
+        data = {
+            "backend": session.backend_name,
+            "resolved_model_id": session.resolved_model_id,
+        }
+        lines = [f"backend: {data['backend']}", f"resolved_model_id: {data['resolved_model_id']}"]
         describe = getattr(session, "describe", None)
         info = getattr(session, "get_info", None)
         extra = None
@@ -1066,17 +1505,104 @@ class UnifiedTuiApp(App):
         elif callable(info):
             extra = info()
         if isinstance(extra, dict):
+            data["describe"] = extra
             for key in sorted(extra.keys()):
                 lines.append(f"{key}: {extra[key]}")
+        return self._to_json_or_lines(data, lines)
+
+    def _show_logs(self, argv: list[str]) -> str:
+        n = 0
+        filt = ""
+        explicit_n = False
+        explicit_filter = False
+        idx = 0
+        while idx < len(argv):
+            token = argv[idx]
+            if token == "--n":
+                if idx + 1 >= len(argv):
+                    return "Missing value for --n"
+                try:
+                    n = max(1, int(argv[idx + 1]))
+                except ValueError:
+                    return f"Invalid --n value: {argv[idx + 1]}"
+                explicit_n = True
+                idx += 2
+                continue
+            if token == "--filter":
+                if idx + 1 >= len(argv):
+                    return "Missing value for --filter"
+                filt = argv[idx + 1]
+                explicit_filter = True
+                idx += 2
+                continue
+            return f"Unknown logs arg: {token}"
+
+        effective_verbose = self._show_opts().verbose or explicit_n or explicit_filter
+        if n <= 0:
+            n = 80 if effective_verbose else 20
+
+        session = self.runtime.session
+        logs_fn = getattr(session, "get_recent_logs", None)
+        if not callable(logs_fn):
+            return f"Backend '{session.backend_name}' does not expose in-memory logs."
+        rows = logs_fn(n)
+        if filt:
+            rows = [r for r in rows if filt in r]
+
+        args = self.runtime.args
+        key = f"{session.backend_name}_log_file"
+        configured_log_file = getattr(args, key, "") if hasattr(args, key) else ""
+        lines = [f"backend: {session.backend_name}", f"requested_n: {n}", f"filter: {filt or '(none)'}"]
+        if configured_log_file:
+            lines.append(f"log_file: {configured_log_file}")
+        else:
+            lines.append("log_file: (not configured)")
+        if not effective_verbose and not rows:
+            lines.append("No logs captured in backend ring buffer yet.")
+            lines.append("Hint: run a prompt, then `/show logs` again or use `/show logs --n 80`.")
+            return "\n".join(lines)
+        if rows:
+            lines.append("tail:")
+            lines.extend(rows)
+        else:
+            lines.append("tail: (empty)")
+        return "\n".join(lines)
+
+    def _show_request(self, argv: list[str]) -> str:
+        del argv
+        session = self.runtime.session
+        req_fn = getattr(session, "get_last_request", None)
+        if not callable(req_fn):
+            return (
+                f"Backend '{session.backend_name}' does not expose request capture.\n"
+                "No request captured (enable request capture in config: [ui] capture_last_request = true)."
+            )
+        payload = req_fn()
+        if not payload:
+            return "No request captured (enable request capture in config: [ui] capture_last_request = true)."
+        if self._show_opts().as_json:
+            return json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+        lines = [
+            f"backend: {session.backend_name}",
+            f"captured: {bool(payload)}",
+            f"keys: {sorted(payload.keys())}",
+        ]
+        if self._show_opts().verbose:
+            lines.append("")
+            lines.append(json.dumps(payload, indent=2, ensure_ascii=False, default=str))
         return "\n".join(lines)
 
     def _show_aliases(self, argv: list[str]) -> str:
         del argv
+        cmd_alias_map: dict[str, list[str]] = {}
+        show_alias_map: dict[str, str] = {}
+        shortcuts: dict[str, str] = {}
         lines = ["Command aliases:"]
         for name in sorted(self.registry.canonical_names()):
             cmd = self.registry.resolve(name)
             if cmd is None or not cmd.aliases:
                 continue
+            cmd_alias_map[name] = [f"/{alias}" for alias in cmd.aliases]
             lines.append(f"  /{name}: " + ", ".join(f"/{alias}" for alias in cmd.aliases))
 
         lines.append("")
@@ -1085,6 +1611,7 @@ class UnifiedTuiApp(App):
             target = self.show_aliases[alias]
             if alias == target:
                 continue
+            show_alias_map[alias] = target
             lines.append(f"  {alias} -> {target}")
 
         lines.append("")
@@ -1094,8 +1621,12 @@ class UnifiedTuiApp(App):
             if cmd is None:
                 continue
             if cmd.summary.startswith("Alias for /show "):
+                shortcuts[f"/{name}"] = cmd.summary.removeprefix("Alias for ")
                 lines.append(f"  /{name} -> {cmd.summary.removeprefix('Alias for ')}")
-        return "\n".join(lines)
+        return self._to_json_or_lines(
+            {"command_aliases": cmd_alias_map, "show_aliases": show_alias_map, "show_shortcuts": shortcuts},
+            lines,
+        )
 
     def _emit_event(self, ev: Event):
         self.event_queue.put(ev)

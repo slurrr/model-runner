@@ -11,7 +11,37 @@ import urllib.request
 
 from tui_app.backends.base import EventEmitter
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnRecord, TurnStart
+from tui_app.log_file import FileLogger
 from tui_app.think_router import ThinkRouter
+
+MAX_CAPTURE_BYTES = 256 * 1024
+
+
+def _sanitize_for_capture(obj):
+    if isinstance(obj, dict):
+        out = {}
+        for key, value in obj.items():
+            key_l = str(key).lower()
+            if key_l in {"authorization", "api_key"}:
+                out[key] = "***"
+                continue
+            out[key] = _sanitize_for_capture(value)
+        return out
+    if isinstance(obj, list):
+        return [_sanitize_for_capture(x) for x in obj]
+    if isinstance(obj, str) and obj.startswith("data:"):
+        return "(data-url omitted)"
+    return obj
+
+
+def _truncate_capture(data: dict) -> dict:
+    raw = json.dumps(data, ensure_ascii=False, default=str)
+    if len(raw.encode("utf-8")) <= MAX_CAPTURE_BYTES:
+        return data
+    marker = "...(truncated)"
+    keep_bytes = max(1024, MAX_CAPTURE_BYTES - len(marker.encode("utf-8")) - 64)
+    trimmed = raw.encode("utf-8")[:keep_bytes].decode("utf-8", errors="ignore")
+    return {"truncated": True, "max_bytes": MAX_CAPTURE_BYTES, "data": trimmed + marker}
 
 
 def can_reach_ollama_host(host: str, timeout: int) -> bool:
@@ -69,14 +99,39 @@ def resolve_host(cli_host: str | None, timeout: int) -> str:
 class OllamaSession:
     backend_name = "ollama"
 
-    def __init__(self, args: argparse.Namespace, resolved_model_id: str, host: str):
+    def __init__(
+        self,
+        args: argparse.Namespace,
+        resolved_model_id: str,
+        host: str,
+        logger: FileLogger | None = None,
+    ):
         self.args = args
         self.resolved_model_id = resolved_model_id
         self.host = host
+        self.logger = logger
+        self._last_request: dict | None = None
+
+    def close(self) -> None:
+        if self.logger is not None:
+            self.logger.close()
+
+    def get_recent_logs(self, n: int = 80) -> list[str]:
+        if self.logger is None:
+            return []
+        return self.logger.get_recent_logs(n=n)
+
+    def get_last_request(self) -> dict | None:
+        return self._last_request
 
     def generate_turn(self, turn_id: int, messages: list[dict[str, str]], emit: EventEmitter) -> None:
         emit(TurnStart(turn_id=turn_id))
         started = time.time()
+        if self.logger is not None:
+            self.logger.log(
+                f"turn_start id={turn_id} messages={len(messages)} model={self.resolved_model_id} "
+                f"max_new_tokens={self.args.max_new_tokens}"
+            )
 
         cli_overrides = set(getattr(self.args, "_cli_overrides", set()) or set())
         config_keys = set(getattr(self.args, "_config_keys", set()) or set())
@@ -105,6 +160,10 @@ class OllamaSession:
             payload["options"] = options
         if self.args.ollama_think in {"true", "false"}:
             payload["think"] = self.args.ollama_think == "true"
+        if getattr(self.args, "capture_last_request", False):
+            self._last_request = _truncate_capture(
+                _sanitize_for_capture({"backend": "ollama", "url": self.host.rstrip("/") + "/api/chat", "payload": payload})
+            )
 
         router = ThinkRouter(assume_think=self.args.assume_think)
         raw_parts: list[str] = []
@@ -182,12 +241,16 @@ class OllamaSession:
                         if retry_body:
                             detail += f" | body: {retry_body}"
                         detail += " | retry_without_think=true"
+                        if self.logger is not None:
+                            self.logger.log(f"turn_error id={turn_id} {detail}")
                         emit(Error(turn_id=turn_id, message=detail))
                         return
                 else:
                     detail = f"Ollama API request failed: HTTP {exc.code} {exc.reason}"
                     if body:
                         detail += f" | body: {body}"
+                    if self.logger is not None:
+                        self.logger.log(f"turn_error id={turn_id} {detail}")
                     emit(Error(turn_id=turn_id, message=detail))
                     return
         except urllib.error.HTTPError as exc:
@@ -195,12 +258,18 @@ class OllamaSession:
             detail = f"Ollama API request failed: HTTP {exc.code} {exc.reason}"
             if body:
                 detail += f" | body: {body}"
+            if self.logger is not None:
+                self.logger.log(f"turn_error id={turn_id} {detail}")
             emit(Error(turn_id=turn_id, message=detail))
             return
         except urllib.error.URLError as exc:
+            if self.logger is not None:
+                self.logger.log(f"turn_error id={turn_id} Ollama API request failed: {exc}")
             emit(Error(turn_id=turn_id, message=f"Ollama API request failed: {exc}"))
             return
         except Exception as exc:
+            if self.logger is not None:
+                self.logger.log(f"turn_error id={turn_id} {exc}")
             emit(Error(turn_id=turn_id, message=str(exc)))
             return
 
@@ -230,6 +299,11 @@ class OllamaSession:
             trimmed_messages=messages,
         )
         emit(Finish(turn_id=turn_id, record=record))
+        if self.logger is not None:
+            self.logger.log(
+                f"turn_finish id={turn_id} elapsed_s={record.timing.get('elapsed', 0):.3f} "
+                f"think_chars={len(record.think)} answer_chars={len(record.answer)}"
+            )
 
 
 def create_session(args: argparse.Namespace) -> OllamaSession:
@@ -238,4 +312,7 @@ def create_session(args: argparse.Namespace) -> OllamaSession:
         model_name = model_name.split(":", 1)[1]
     host = resolve_host(args.ollama_host, args.ollama_timeout)
     print(f"Using Ollama host: {host}")
-    return OllamaSession(args=args, resolved_model_id=model_name, host=host)
+    logger = FileLogger.from_value(getattr(args, "ollama_log_file", ""), "ollama")
+    if logger is not None:
+        logger.log(f"session_init model={model_name} host={host}")
+    return OllamaSession(args=args, resolved_model_id=model_name, host=host, logger=logger)

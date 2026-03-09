@@ -8,6 +8,7 @@ import time
 
 from tui_app.backends.base import EventEmitter
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnRecord, TurnStart
+from tui_app.log_file import FileLogger
 from tui_app.think_router import ThinkRouter
 
 
@@ -82,10 +83,20 @@ def _common_gguf_sampling_kwargs(args: argparse.Namespace, stop):
 class GGUFSession:
     backend_name = "gguf"
 
-    def __init__(self, llm, args: argparse.Namespace, resolved_model_id: str):
+    def __init__(self, llm, args: argparse.Namespace, resolved_model_id: str, logger: FileLogger | None = None):
         self.llm = llm
         self.args = args
         self.resolved_model_id = resolved_model_id
+        self.logger = logger
+
+    def close(self) -> None:
+        if self.logger is not None:
+            self.logger.close()
+
+    def get_recent_logs(self, n: int = 80) -> list[str]:
+        if self.logger is None:
+            return []
+        return self.logger.get_recent_logs(n=n)
 
     def _fallback_plain_prompt(self, messages: list[dict[str, str]]) -> str:
         system = self.args.system or "You are a helpful assistant."
@@ -99,6 +110,11 @@ class GGUFSession:
     def generate_turn(self, turn_id: int, messages: list[dict[str, str]], emit: EventEmitter) -> None:
         emit(TurnStart(turn_id=turn_id))
         started = time.time()
+        if self.logger is not None:
+            self.logger.log(
+                f"turn_start id={turn_id} messages={len(messages)} prompt_mode={self.args.prompt_mode} "
+                f"max_new_tokens={self.args.max_new_tokens}"
+            )
         router = ThinkRouter(assume_think=self.args.assume_think)
         working_messages = list(messages)
 
@@ -187,6 +203,8 @@ class GGUFSession:
                 except Exception as exc:
                     if _is_context_overflow(exc) and (_drop_oldest_turn() or _shrink_max_tokens()):
                         continue
+                    if self.logger is not None:
+                        self.logger.log(f"turn_error id={turn_id} error={exc}")
                     emit(Error(turn_id=turn_id, message=f"Generation failed in plain mode: {exc}"))
                     return
         else:
@@ -242,6 +260,8 @@ class GGUFSession:
                     except Exception as fallback_exc:
                         if _is_context_overflow(fallback_exc) and (_drop_oldest_turn() or _shrink_max_tokens()):
                             continue
+                        if self.logger is not None:
+                            self.logger.log(f"turn_error id={turn_id} error={exc}; fallback={fallback_exc}")
                         emit(Error(turn_id=turn_id, message=f"Generation failed: {exc}; fallback failed: {fallback_exc}"))
                         return
 
@@ -275,6 +295,11 @@ class GGUFSession:
             trimmed_messages=working_messages,
         )
         emit(Finish(turn_id=turn_id, record=record))
+        if self.logger is not None:
+            self.logger.log(
+                f"turn_finish id={turn_id} elapsed_s={record.timing.get('elapsed', 0):.3f} "
+                f"think_chars={len(record.think)} answer_chars={len(record.answer)}"
+            )
 
 
 def create_session(args: argparse.Namespace) -> GGUFSession:
@@ -284,6 +309,7 @@ def create_session(args: argparse.Namespace) -> GGUFSession:
     if not model_path.lower().endswith(".gguf"):
         raise RuntimeError(f"Expected a .gguf file, got: {model_path}")
 
+    logger = FileLogger.from_value(getattr(args, "gguf_log_file", ""), "gguf")
     try:
         from llama_cpp import Llama, _internals
 
@@ -308,6 +334,8 @@ def create_session(args: argparse.Namespace) -> GGUFSession:
         ) from exc
 
     print(f"Loading GGUF model: {model_path}")
+    if logger is not None:
+        logger.log(f"session_init model={model_path} n_ctx={args.n_ctx} n_gpu_layers={args.n_gpu_layers}")
     llm = Llama(
         model_path=model_path,
         n_ctx=args.n_ctx,
@@ -351,4 +379,6 @@ def create_session(args: argparse.Namespace) -> GGUFSession:
             llm.chat_format = template_value
             template_status = f"format:{template_value}"
     print(f"GGUF chat template: {template_status}")
-    return GGUFSession(llm=llm, args=args, resolved_model_id=model_path)
+    if logger is not None:
+        logger.log(f"chat_template={template_status}")
+    return GGUFSession(llm=llm, args=args, resolved_model_id=model_path, logger=logger)

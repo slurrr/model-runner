@@ -16,6 +16,11 @@ This folder stores short decision records (ADRs) for choices made while evolving
 | 0008 | TUI follow mode is intent-driven | Follow state changes only from explicit user scroll intent, not passive scroll-delta inference. |
 | 0009 | TUI slash commands are local-only and registry-driven | Provide in-TUI introspection without sending commands to the model. |
 | 0010 | Mirror PR review output into a `reviews` branch | CI writes bot review bundles to an orphan `reviews` branch for local/offline reading. |
+| 0011 | Adopt TOML configs with profiles and machine-local overrides | Switch primary config to TOML sections; add profiles and local-only machine overrides. |
+| 0012 | Store upstream model cards as `notes/model_card.md` | Keep upstream HF README content separate from repo-local notes. |
+| 0013 | Keep `openai` backend name; add “targets” for multiple servers | Name backends by protocol contract; add `config/targets/openai/` for endpoints/auth. |
+| 0014 | Add `/status`; make `/show` the primary inspector | Provide concise status + verbose inspection; keep old shortcuts as hidden aliases. |
+| 0015 | Token accounting and metrics | Prefer backend-native usage/token IDs; fall back to backend tokenization; avoid char-as-token substitutions. |
 
 ## Format
 

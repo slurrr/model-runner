@@ -1,0 +1,33 @@
+[model]
+id = ""
+
+[gen]
+max_new_tokens = 2048
+repetition_penalty = 1.0
+stream = true
+temperature = 0.7
+top_p = 1.0
+
+[prompt]
+chat_template = ""
+prompt_mode = "chat"
+system = ""
+system_file = ""
+user_prefix = ""
+
+[ui]
+assume_think = false
+no_animate_thinking = false
+save_transcript = ""
+capture_last_request = false
+show_thinking = false
+
+[backend.exl2]
+cache_type = "fp16"
+exl2_repeat_streak_max = 64
+exl2_repo_path = ""
+gpu_split = ""
+log_file = ""
+low_mem = false
+min_free_tokens = 256
+model_path = ""
