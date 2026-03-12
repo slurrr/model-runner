@@ -26,6 +26,7 @@ allowed_token_ids = []
 prompt_logprobs = 0
 
 [prompt]
+chat_template = ""
 system = ""
 system_file = ""
 user_prefix = ""
@@ -33,12 +34,23 @@ user_prefix = ""
 [ui]
 show_thinking = true
 assume_think = false
+history_strip_think = false
 no_animate_thinking = false
 save_transcript = ""
 capture_last_request = true
 scroll_lines = 9
 ui_tick_ms = 33
 ui_max_events_per_tick = 120
+
+[tools]
+enabled = false
+mode = "dry_run"
+schema_file = ""
+allow = []
+deny = []
+max_calls_per_turn = 3
+timeout_s = 10
+max_result_chars = 8000
 
 [backend.vllm]
 mode = "managed"

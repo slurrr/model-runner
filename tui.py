@@ -67,6 +67,39 @@ def _resolve_path_maybe_relative(path: str, config_path: str | None = None) -> s
     return os.path.abspath(expanded)
 
 
+def _is_bare_model_stem(value: str | None) -> bool:
+    text = (value or "").strip()
+    if not text:
+        return False
+    if text.startswith((".", "~")):
+        return False
+    if "/" in text or "\\" in text:
+        return False
+    if ":" in text:
+        return False
+    return True
+
+
+def _resolve_gguf_model_id(
+    model_id: str | None,
+    *,
+    model_path: str | None,
+    config_path: str | None,
+) -> str | None:
+    raw_model_path = (model_path or "").strip()
+    if not raw_model_path:
+        return model_id
+
+    value = (model_id or "").strip()
+    if not value:
+        return _resolve_path_maybe_relative(raw_model_path, config_path=config_path)
+    if value.lower().endswith(".gguf"):
+        return model_id
+    if _is_bare_model_stem(value):
+        return _resolve_path_maybe_relative(raw_model_path, config_path=config_path)
+    return model_id
+
+
 def _load_default_backend_config(model: str, backend: str, profile: str = ""):
     if backend != "ollama":
         data, meta = load_default_config_layers_for_model(
@@ -168,6 +201,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--show-thinking", action="store_true")
     parser.add_argument("--no-animate-thinking", action="store_true")
     parser.add_argument("--save-transcript", default="")
+    tools_enabled_group = parser.add_mutually_exclusive_group()
+    tools_enabled_group.add_argument("--tools-enabled", dest="tools_enabled", action="store_true")
+    tools_enabled_group.add_argument("--no-tools-enabled", dest="tools_enabled", action="store_false")
+    parser.add_argument("--tools-mode", choices=["off", "dry_run", "execute"], default="dry_run")
+    parser.add_argument("--tools-schema-file", default="")
+    parser.add_argument("--tools-allow", nargs="+", default=None)
+    parser.add_argument("--tools-deny", nargs="+", default=None)
+    parser.add_argument("--tools-max-calls-per-turn", type=int, default=3)
+    parser.add_argument("--tools-timeout-s", type=float, default=10.0)
+    parser.add_argument("--tools-max-result-chars", type=int, default=8000)
     think_mode_group = parser.add_mutually_exclusive_group()
     think_mode_group.add_argument("--assume-think", dest="assume_think", action="store_true")
     think_mode_group.add_argument("--no-assume-think", dest="assume_think", action="store_false")
@@ -182,6 +225,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--hf-log-file", default="")
     parser.add_argument("--prompt-mode", choices=["chat", "plain"], default="chat")
     parser.add_argument("--chat-template", default="")
+    history_strip_group = parser.add_mutually_exclusive_group()
+    history_strip_group.add_argument("--history-strip-think", dest="history_strip_think", action="store_true")
+    history_strip_group.add_argument("--no-history-strip-think", dest="history_strip_think", action="store_false")
+    parser.set_defaults(history_strip_think=False)
     parser.add_argument("--max-context-tokens", type=int, default=None)
     parser.add_argument("--repetition-penalty", type=float, default=1.0)
     parser.add_argument("--presence-penalty", type=float, default=None)
@@ -254,7 +301,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vllm-dtype", default="")
     parser.add_argument("--vllm-log-file", default="")
 
-    parser.set_defaults(stream=True, assume_think=None)
+    parser.set_defaults(stream=True, assume_think=None, tools_enabled=False)
     parser.set_defaults(
         flash_attn=None,
         xformers=None,
@@ -303,6 +350,14 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "show_thinking",
         "no_animate_thinking",
         "save_transcript",
+        "tools_enabled",
+        "tools_mode",
+        "tools_schema_file",
+        "tools_allow",
+        "tools_deny",
+        "tools_max_calls_per_turn",
+        "tools_timeout_s",
+        "tools_max_result_chars",
         "assume_think",
         "scroll_lines",
         "ui_tick_ms",
@@ -403,6 +458,15 @@ def _detect_cli_overrides(argv: list[str]) -> set[str]:
         "--assume-think": "assume_think",
         "--no-assume-think": "assume_think",
         "--capture-last-request": "capture_last_request",
+        "--tools-enabled": "tools_enabled",
+        "--no-tools-enabled": "tools_enabled",
+        "--tools-mode": "tools_mode",
+        "--tools-schema-file": "tools_schema_file",
+        "--tools-allow": "tools_allow",
+        "--tools-deny": "tools_deny",
+        "--tools-max-calls-per-turn": "tools_max_calls_per_turn",
+        "--tools-timeout-s": "tools_timeout_s",
+        "--tools-max-result-chars": "tools_max_result_chars",
         "--model-path": "model_path",
         "--hf-log-file": "hf_log_file",
         "--gguf-log-file": "gguf_log_file",
@@ -545,6 +609,7 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
         "model_id",
         "backend",
         "config",
+        "profile",
         "max_new_tokens",
         "seed",
         "stream",
@@ -650,10 +715,14 @@ def parse_args() -> argparse.Namespace:
     args._config_layers = list(config_meta.get("loaded", []) or ([] if not config_path else [config_path]))
     args._config_origins = dict(config_meta.get("origins", {}) or {})
     early_backend = detect_backend(args.model_id, args.backend)
-    if early_backend == "gguf" and args.model_path and not args.model_id:
-        args.model_id = _resolve_path_maybe_relative(args.model_path, config_path=config_path)
     if not args.model_id and early_backend == "gguf":
         args.model_id = defaults.get("model_path")
+    if early_backend == "gguf":
+        args.model_id = _resolve_gguf_model_id(
+            args.model_id,
+            model_path=args.model_path,
+            config_path=config_path,
+        )
     if not args.model_id and early_backend != "openai":
         args.model_id = defaults.get("model_id")
     if not args.model_id and early_backend != "openai":
@@ -670,8 +739,12 @@ def parse_args() -> argparse.Namespace:
     args._config_path = config_path
     if args.assume_think is None:
         args.assume_think = False
-    if args.backend == "gguf" and args.model_path and not args.model_id:
-        args.model_id = _resolve_path_maybe_relative(args.model_path, config_path=config_path)
+    if args.backend == "gguf":
+        args.model_id = _resolve_gguf_model_id(
+            args.model_id,
+            model_path=args.model_path,
+            config_path=config_path,
+        )
     if args.backend == "exl2" and isinstance(args.model_id, str) and args.model_id.startswith("exl2:"):
         args.model_id = args.model_id.split(":", 1)[1]
     if args.backend == "openai" and isinstance(args.model_id, str) and args.model_id.startswith("openai:"):

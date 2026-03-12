@@ -1,6 +1,6 @@
 [gen]
 # Leave model/prompt/ui in base `default.toml`; this profile focuses on throughput.
-max_new_tokens = 1024
+max_new_tokens = 8192
 
 [backend.vllm]
 # Fast profile philosophy:
@@ -18,9 +18,9 @@ extra_args = [
   # If you want to hard-cap KV cache size instead of using gpu_memory_utilization:
   # "--kv-cache-memory-bytes", "12G",
   "--disable-log-stats",
-  "--no-enable-log-requests",
+  # "--no-enable-log-requests",
   "--disable-uvicorn-access-log",
+  "--enable-force-include-usage",  
 ]
 gpu_memory_utilization = 0.92
-max_model_len = 8192
-
+max_model_len = 16384

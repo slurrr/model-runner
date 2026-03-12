@@ -39,11 +39,14 @@ def _flatten_toml_config(data: dict, *, backend: str) -> dict:
         if "display_name" in model:
             out["display_name"] = model.get("display_name")
 
-    for section in ("gen", "prompt", "ui"):
+    for section in ("gen", "prompt", "ui", "tools"):
         sec = data.get(section)
         if isinstance(sec, dict):
             for key, value in sec.items():
-                out[key] = value
+                mapped = key
+                if section == "tools":
+                    mapped = f"tools_{key}"
+                out[mapped] = value
 
     backend_root = data.get("backend")
     if isinstance(backend_root, dict):

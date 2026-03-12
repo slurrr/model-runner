@@ -21,6 +21,8 @@ from textual.widgets import Static, TextArea
 
 from tui_app.backends.base import BackendSession, Event
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnStart
+from tui_app.knobs import build_intent_knobs
+from tui_app.tools import build_tool_runtime
 
 
 @dataclass
@@ -125,7 +127,7 @@ class InfoMessage(Static):
 
 class ThinkingPanel(Container):
     expanded = reactive(False)
-    running = reactive(True)
+    running = reactive(False)
     phase = reactive(0)
 
     def __init__(self, start_expanded: bool, animate: bool):
@@ -133,8 +135,8 @@ class ThinkingPanel(Container):
         self.expanded = start_expanded
         self.animate = animate
         self.thinking_text = ""
-        self.thinking_tokens = 0
-        self.started_at = time.time()
+        self.generated_tokens = 0
+        self.started_at: float | None = None
         self.total_seconds = 0.0
         self.tokens_per_sec = 0.0
         self.ended_in_think = False
@@ -156,16 +158,20 @@ class ThinkingPanel(Container):
 
     def _header_text(self) -> Text:
         arrow = "▼" if self.expanded else ">"
-        base = "thinking..."
-        elapsed = time.time() - self.started_at if self.running else self.total_seconds
-        suffix = f" ({self.thinking_tokens} tokens"
-        if self.running:
-            suffix += f", {elapsed:.1f}s"
+        base = "model..."
+        if self.started_at is None and self.total_seconds <= 0:
+            suffix = " (waiting)"
         else:
-            suffix += f", {self.total_seconds:.1f}s, {self.tokens_per_sec:.1f} tok/sec"
-        if self.ended_in_think:
-            suffix += ", truncated"
-        suffix += ")"
+            elapsed = (time.time() - self.started_at) if (self.running and self.started_at is not None) else self.total_seconds
+            suffix = f" ({self.generated_tokens} tokens"
+            if self.running:
+                live_tps = (self.generated_tokens / elapsed) if elapsed > 0 else 0.0
+                suffix += f", {elapsed:.1f}s, {live_tps:.1f} tok/sec"
+            else:
+                suffix += f", {self.total_seconds:.1f}s, {self.tokens_per_sec:.1f} tok/sec"
+            if self.ended_in_think:
+                suffix += ", truncated"
+            suffix += ")"
 
         header = f"{arrow} {base}{suffix}"
         text = Text(header, style="grey")
@@ -192,10 +198,16 @@ class ThinkingPanel(Container):
             body.update("")
         self.refresh(layout=True)
 
-    def add_think_tokens(self, token_inc: int):
+    def start(self):
+        if self.started_at is None:
+            self.started_at = time.time()
+        self.running = True
+        self._render_header()
+
+    def add_generated_tokens(self, token_inc: int):
         if token_inc <= 0:
             return
-        self.thinking_tokens += token_inc
+        self.generated_tokens += token_inc
         self._render_header()
 
     def append_thinking(self, text: str):
@@ -207,10 +219,16 @@ class ThinkingPanel(Container):
             self._render_body()
         self.refresh(layout=True)
 
-    def finish(self, ended_in_think: bool):
+    def finish(self, *, ended_in_think: bool, completion_tokens: int | None = None, tokens_per_s: float | None = None):
         self.running = False
-        self.total_seconds = max(0.0, time.time() - self.started_at)
-        self.tokens_per_sec = self.thinking_tokens / self.total_seconds if self.total_seconds > 0 else 0.0
+        if self.started_at is not None:
+            self.total_seconds = max(0.0, time.time() - self.started_at)
+        if completion_tokens is not None and completion_tokens >= 0:
+            self.generated_tokens = int(completion_tokens)
+        if tokens_per_s is not None:
+            self.tokens_per_sec = float(tokens_per_s)
+        else:
+            self.tokens_per_sec = self.generated_tokens / self.total_seconds if self.total_seconds > 0 else 0.0
         self.ended_in_think = ended_in_think
         self._render_header()
 
@@ -235,13 +253,18 @@ class AssistantMessage(Container):
     def compose(self) -> ComposeResult:
         self.thinking_panel = ThinkingPanel(start_expanded=self.start_expanded, animate=self.animate_thinking)
         self.answer_widget = Static(classes="assistant-answer")
+        self.tools_widget = Static(classes="assistant-tools")
         self.hint_widget = Static(classes="assistant-hint")
         yield self.thinking_panel
         yield self.answer_widget
+        yield self.tools_widget
         yield self.hint_widget
 
-    def add_think_tokens(self, token_inc: int):
-        self.thinking_panel.add_think_tokens(token_inc=token_inc)
+    def start_turn(self):
+        self.thinking_panel.start()
+
+    def add_generated_tokens(self, token_inc: int):
+        self.thinking_panel.add_generated_tokens(token_inc=token_inc)
 
     def append_think(self, text: str):
         self.thinking_panel.append_thinking(text)
@@ -254,14 +277,55 @@ class AssistantMessage(Container):
         self.answer_widget.update(Text(self.answer_text, style="white"))
         self.refresh(layout=True)
 
-    def finish(self, ended_in_think: bool):
-        self.thinking_panel.finish(ended_in_think=ended_in_think)
+    def finish(self, record):
+        token_counts = dict(record.token_counts or {})
+        throughput = dict(record.throughput or {})
+        completion_tokens = token_counts.get("completion_tokens")
+        tokens_per_s = throughput.get("tokens_per_s")
+        self.thinking_panel.finish(
+            ended_in_think=record.ended_in_think,
+            completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
+            tokens_per_s=float(tokens_per_s) if isinstance(tokens_per_s, (int, float)) else None,
+        )
+        self.tools_widget.update(self._render_tool_activity(record.tool_activity or []))
         if not self.answer_text.strip():
             msg = "(No final answer produced; generation ended during thinking. Increase max_new_tokens or adjust prompt.)"
             self.hint_widget.update(Text(msg, style="yellow"))
 
     def toggle_thinking(self):
         self.thinking_panel.toggle()
+
+    @staticmethod
+    def _render_tool_activity(tool_activity: list[dict[str, object]]) -> Text:
+        if not tool_activity:
+            return Text("")
+        body = Text()
+        for index, item in enumerate(tool_activity, start=1):
+            if index > 1:
+                body.append("\n\n")
+            status = str(item.get("status", "") or "")
+            name = str(item.get("name", "") or "")
+            tool_call_id = str(item.get("tool_call_id", "") or "")
+            body.append(f"[tool] {name}", style="bold cyan")
+            if tool_call_id:
+                body.append(f" id={tool_call_id}", style="grey70")
+            if status:
+                body.append(f" status={status}", style="yellow")
+            body.append("\nargs.raw:\n", style="grey70")
+            body.append(str(item.get("arguments_raw", "") or ""), style="white")
+            parsed = item.get("arguments_json")
+            if parsed is not None:
+                body.append("\nargs.json:\n", style="grey70")
+                body.append(json.dumps(parsed, indent=2, ensure_ascii=False, default=str), style="white")
+            result = item.get("result")
+            error = item.get("error")
+            if result not in (None, ""):
+                body.append("\nresult:\n", style="grey70")
+                body.append(str(result), style="white")
+            if error not in (None, "") and error != result:
+                body.append("\nerror:\n", style="grey70")
+                body.append(str(error), style="white")
+        return body
 
 
 class TranscriptPane(VerticalScroll):
@@ -342,6 +406,7 @@ class UnifiedTuiApp(App):
     #thinking-header { color: grey; text-style: bold; }
     #thinking-body { color: grey; margin: 0 0 0 2; height: auto; width: 100%; text-wrap: wrap; }
     .assistant-answer { color: white; height: auto; width: 100%; text-wrap: wrap; }
+    .assistant-tools { color: cyan; margin: 1 0 0 2; height: auto; width: 100%; text-wrap: wrap; }
     .assistant-hint { margin: 1 0 0 0; }
     #input-band { dock: bottom; height: 6; background: #3a3a3a; padding: 0 1; }
     #chat-input { width: 100%; height: 100%; background: #3a3a3a; color: white; border: none; }
@@ -419,7 +484,7 @@ class UnifiedTuiApp(App):
             return
 
         self.pending_assistant.append_answer("\n[Generation stopped by user]")
-        self.pending_assistant.finish(ended_in_think=False)
+        self.pending_assistant.thinking_panel.finish(ended_in_think=False)
         self.is_generating = False
         # Advance turn id so late events from the interrupted worker are ignored.
         self.pending_turn_id += 1
@@ -506,7 +571,9 @@ class UnifiedTuiApp(App):
         if text.lower() == "clear":
             self.transcript.remove_children()
             self.messages = []
+            self.turn_records = []
             self.pending_images.clear()
+            self.pending_assistant = None
             if self.runtime.args.system:
                 self.messages.append({"role": "system", "content": self.runtime.args.system})
             input_box.load_text("")
@@ -630,6 +697,7 @@ class UnifiedTuiApp(App):
             ShowTopic("model", "Model/backend identifiers", "/show model", UnifiedTuiApp._show_model),
             ShowTopic("config", "Loaded config path", "/show config", UnifiedTuiApp._show_config),
             ShowTopic("backend", "Backend details", "/show backend", UnifiedTuiApp._show_backend),
+            ShowTopic("tools", "Tool harness configuration", "/show tools", UnifiedTuiApp._show_tools),
             ShowTopic("aliases", "Alias map for slash commands/topics", "/show aliases", UnifiedTuiApp._show_aliases),
             ShowTopic("logs", "Recent backend logs", "/show logs [--n N] [--filter TEXT]", UnifiedTuiApp._show_logs),
             ShowTopic("request", "Last captured request payload (sanitized)", "/show request", UnifiedTuiApp._show_request),
@@ -649,6 +717,7 @@ class UnifiedTuiApp(App):
             "model": "model",
             "config": "config",
             "backend": "backend",
+            "tools": "tools",
             "aliases": "aliases",
             "logs": "logs",
             "request": "request",
@@ -721,6 +790,7 @@ class UnifiedTuiApp(App):
             "history",
             "last",
             "backend",
+            "tools",
             "logs",
             "request",
         ):
@@ -800,7 +870,7 @@ class UnifiedTuiApp(App):
                 "Use /status for a concise summary.",
                 "Topics:",
                 "  core: status, session, model, backend",
-                "  generation: gen, prompt, request, logs",
+                "  generation: gen, prompt, request, logs, tools",
                 "  runtime: ui, history, last, files, env, config, aliases, args",
                 "Examples:",
                 "  /show session",
@@ -867,13 +937,14 @@ class UnifiedTuiApp(App):
         args = self.runtime.args
         backend = self.runtime.session.backend_name
         prompt_mode = getattr(args, "prompt_mode", None) if backend == "hf" else None
-        chat_template = getattr(args, "chat_template", None) if backend == "hf" else None
+        chat_template = getattr(args, "chat_template", None)
         lines = [
             f"backend: {backend}",
             f"user_prefix: {args.user_prefix!r}",
             "prompt_prefix: N/A",
             f"prompt_mode: {prompt_mode if prompt_mode is not None else 'N/A'}",
             f"chat_template: {chat_template if chat_template else 'N/A'}",
+            f"history_strip_think: {bool(getattr(args, 'history_strip_think', False))}",
         ]
         return "\n".join(lines)
 
@@ -917,11 +988,12 @@ class UnifiedTuiApp(App):
         del argv
         self.transcript.remove_children()
         self.messages = []
+        self.turn_records = []
         self.pending_images.clear()
         if self.runtime.args.system:
             self.messages.append({"role": "system", "content": self.runtime.args.system})
         self.pending_assistant = None
-        return "Transcript and conversation history cleared."
+        return "Transcript, conversation history, and turn records cleared."
 
     def _cmd_exit(self, argv: list[str]) -> str:
         del argv
@@ -947,6 +1019,33 @@ class UnifiedTuiApp(App):
         if backend == "ollama":
             return f"model={session.resolved_model_id}"
         return ", ".join(f"{k}={info[k]}" for k in sorted(info.keys()))
+
+    @staticmethod
+    def _token_counts_view(record) -> dict[str, object]:
+        counts = dict(record.token_counts or {})
+        return {
+            "prompt_tokens": counts.get("prompt_tokens", "unavailable"),
+            "completion_tokens": counts.get("completion_tokens", "unavailable"),
+            "total_tokens": counts.get("total_tokens", "unavailable"),
+        }
+
+    @staticmethod
+    def _tokens_per_s_view(record) -> object:
+        throughput = dict(record.throughput or {})
+        return throughput.get("tokens_per_s", "unavailable")
+
+    @staticmethod
+    def _context_view(record) -> dict[str, object]:
+        context = dict(record.context or {})
+        return {
+            "strategy": context.get("strategy", "unavailable"),
+            "dropped_messages": context.get("dropped_messages", 0),
+            "fit": context.get("fit", "unavailable"),
+            "system_message_preserved": context.get("system_message_preserved", "unavailable"),
+            "system_drop_required": context.get("system_drop_required", "unavailable"),
+            "reserved_generation_tokens": context.get("reserved_generation_tokens", "unavailable"),
+            "context_window": context.get("context_window", "unavailable"),
+        }
 
     def _show_status(self, argv: list[str]) -> str:
         del argv
@@ -977,12 +1076,20 @@ class UnifiedTuiApp(App):
                 data["log_tail_available"] = False
         if self.turn_records:
             last = self.turn_records[-1]
+            token_counts = self._token_counts_view(last)
+            context = self._context_view(last)
             data["last_turn"] = {
                 "elapsed_s": last.timing.get("elapsed"),
                 "ended_in_think": bool(last.ended_in_think),
-                "len_raw": len(last.raw),
-                "len_think": len(last.think),
-                "len_answer": len(last.answer),
+                "chars_raw": len(last.raw),
+                "chars_think": len(last.think),
+                "chars_answer": len(last.answer),
+                "tool_activity_count": len(last.tool_activity or []),
+                "prompt_tokens": token_counts["prompt_tokens"],
+                "completion_tokens": token_counts["completion_tokens"],
+                "total_tokens": token_counts["total_tokens"],
+                "tokens_per_s": self._tokens_per_s_view(last),
+                "context": context,
             }
         else:
             data["last_turn"] = "(none)"
@@ -1008,9 +1115,17 @@ class UnifiedTuiApp(App):
                     "last_turn:",
                     f"  elapsed_s: {lt['elapsed_s']}",
                     f"  ended_in_think: {lt['ended_in_think']}",
-                    f"  len_raw: {lt['len_raw']}",
-                    f"  len_think: {lt['len_think']}",
-                    f"  len_answer: {lt['len_answer']}",
+                    f"  chars_raw: {lt['chars_raw']}",
+                    f"  chars_think: {lt['chars_think']}",
+                    f"  chars_answer: {lt['chars_answer']}",
+                    f"  tool_activity_count: {lt['tool_activity_count']}",
+                    f"  prompt_tokens: {lt['prompt_tokens']}",
+                    f"  completion_tokens: {lt['completion_tokens']}",
+                    f"  total_tokens: {lt['total_tokens']}",
+                    f"  tokens_per_s: {lt['tokens_per_s']}",
+                    f"  context_strategy: {lt['context']['strategy']}",
+                    f"  dropped_history_messages: {lt['context']['dropped_messages']}",
+                    f"  system_message_preserved: {lt['context']['system_message_preserved']}",
                 ]
             )
         else:
@@ -1061,296 +1176,25 @@ class UnifiedTuiApp(App):
     def _show_gen(self, argv: list[str]) -> str:
         del argv
         args = self.runtime.args
-        backend = self.runtime.session.backend_name
-        cli_overrides = set(getattr(args, "_cli_overrides", set()) or set())
-        config_keys = set(getattr(args, "_config_keys", set()) or set())
-        user_set = cli_overrides | config_keys
-        ignored: list[str] = []
-
-        if backend == "hf":
-            keys = [
-                "max_new_tokens",
-                "temperature",
-                "top_p",
-                "top_k",
-                "stop_strings",
-                "repetition_penalty",
-                "typical_p",
-                "min_p",
-                "max_time",
-                "num_beams",
-                "no_repeat_ngram_size",
-            ]
-            sent = {
-                "max_new_tokens": args.max_new_tokens,
-                "temperature": args.temperature,
-                "top_p": args.top_p,
-                "repetition_penalty": args.repetition_penalty,
-                "num_beams": args.num_beams,
-                "no_repeat_ngram_size": args.no_repeat_ngram_size,
-            }
-            if args.top_k is not None:
-                sent["top_k"] = args.top_k
-            if args.stop_strings is not None:
-                sent["stop_strings"] = args.stop_strings
-            if args.typical_p is not None:
-                sent["typical_p"] = args.typical_p
-            if args.min_p is not None:
-                sent["min_p"] = args.min_p
-            if args.max_time is not None:
-                sent["max_time"] = args.max_time
-            deferred = []
-            for optional_key in ("top_k", "stop_strings", "typical_p", "min_p", "max_time"):
-                if optional_key not in sent:
-                    deferred.append(optional_key)
-        elif backend == "gguf":
-            keys = [
-                "max_new_tokens",
-                "temperature",
-                "top_p",
-                "top_k",
-                "min_p",
-                "typical_p",
-                "repetition_penalty",
-                "stop_strings",
-            ]
-            sent = {
-                "max_tokens": args.max_new_tokens,
-                "temperature": args.temperature,
-                "top_p": args.top_p,
-            }
-            if args.top_k is not None:
-                sent["top_k"] = args.top_k
-            if args.min_p is not None:
-                sent["min_p"] = args.min_p
-            if args.typical_p is not None:
-                sent["typical_p"] = args.typical_p
-            if args.repetition_penalty not in (None, 1.0):
-                sent["repeat_penalty"] = args.repetition_penalty
-            if args.stop_strings is not None:
-                sent["stop"] = args.stop_strings
-            deferred = []
-            for optional_key, sent_key in (
-                ("top_k", "top_k"),
-                ("min_p", "min_p"),
-                ("typical_p", "typical_p"),
-                ("repetition_penalty", "repeat_penalty"),
-                ("stop_strings", "stop"),
-            ):
-                if sent_key not in sent:
-                    deferred.append(optional_key)
-        elif backend == "exl2":
-            keys = [
-                "max_new_tokens",
-                "temperature",
-                "top_p",
-                "top_k",
-                "min_p",
-                "typical_p",
-                "repetition_penalty",
-                "frequency_penalty",
-                "presence_penalty",
-                "stop_strings",
-            ]
-            sent = {
-                "max_new_tokens": args.max_new_tokens,
-                "temperature": args.temperature,
-                "top_p": args.top_p,
-                "top_k": (args.top_k or 0),
-                "min_p": (args.min_p or 0),
-                "typical": (args.typical_p or 0),
-                "repetition_penalty": args.repetition_penalty,
-                "frequency_penalty": (args.frequency_penalty or 0.0),
-                "presence_penalty": (args.presence_penalty or 0.0),
-            }
-            deferred = []
-            if args.stop_strings:
-                sent["stop_strings"] = args.stop_strings
-            if not args.stop_strings:
-                deferred.append("stop_strings")
-        elif backend == "openai":
-            keys = [
-                "max_new_tokens",
-                "temperature",
-                "top_p",
-                "stop_strings",
-                "seed",
-            ]
-            sent = {
-                "max_tokens": args.max_new_tokens,
-                "temperature": args.temperature,
-                "top_p": args.top_p,
-            }
-            deferred = []
-            ignored = []
-            if args.stop_strings:
-                sent["stop"] = args.stop_strings
-            else:
-                deferred.append("stop_strings")
-            if args.seed is not None:
-                sent["seed"] = args.seed
-            else:
-                deferred.append("seed")
-            for k in ("top_k", "min_p", "typical_p", "repetition_penalty", "presence_penalty", "frequency_penalty"):
-                if getattr(args, k, None) not in (None, 1.0):
-                    ignored.append(k)
-        elif backend == "vllm":
-            keys = [
-                "max_new_tokens",
-                "temperature",
-                "top_p",
-                "top_k",
-                "min_p",
-                "repetition_penalty",
-                "presence_penalty",
-                "frequency_penalty",
-                "stop_strings",
-                "stop_token_ids",
-                "ignore_eos",
-                "min_tokens",
-                "seed",
-                "best_of",
-                "use_beam_search",
-                "length_penalty",
-                "include_stop_str_in_output",
-                "skip_special_tokens",
-                "spaces_between_special_tokens",
-                "truncate_prompt_tokens",
-                "allowed_token_ids",
-                "prompt_logprobs",
-            ]
-            sent = {
-                "max_tokens": args.max_new_tokens,
-                "temperature": args.temperature,
-                "top_p": args.top_p,
-            }
-            deferred = []
-            ignored = []
-            if args.top_k not in (None, -1):
-                sent["top_k"] = args.top_k
-            else:
-                deferred.append("top_k")
-            if args.min_p not in (None, 0.0):
-                sent["min_p"] = args.min_p
-            else:
-                deferred.append("min_p")
-            if args.ignore_eos is True:
-                sent["ignore_eos"] = args.ignore_eos
-            else:
-                deferred.append("ignore_eos")
-            if args.min_tokens not in (None, 0):
-                sent["min_tokens"] = args.min_tokens
-            else:
-                deferred.append("min_tokens")
-            if args.best_of not in (None, 1):
-                sent["best_of"] = args.best_of
-            else:
-                deferred.append("best_of")
-            if args.use_beam_search is True:
-                sent["use_beam_search"] = args.use_beam_search
-            else:
-                deferred.append("use_beam_search")
-            if args.length_penalty not in (None, 1.0):
-                sent["length_penalty"] = args.length_penalty
-            else:
-                deferred.append("length_penalty")
-            if args.include_stop_str_in_output is True:
-                sent["include_stop_str_in_output"] = args.include_stop_str_in_output
-            else:
-                deferred.append("include_stop_str_in_output")
-            if args.skip_special_tokens is False:
-                sent["skip_special_tokens"] = args.skip_special_tokens
-            else:
-                deferred.append("skip_special_tokens")
-            if args.spaces_between_special_tokens is False:
-                sent["spaces_between_special_tokens"] = args.spaces_between_special_tokens
-            else:
-                deferred.append("spaces_between_special_tokens")
-            if args.truncate_prompt_tokens not in (None, 0):
-                sent["truncate_prompt_tokens"] = args.truncate_prompt_tokens
-            else:
-                deferred.append("truncate_prompt_tokens")
-            if args.prompt_logprobs not in (None, 0):
-                sent["prompt_logprobs"] = args.prompt_logprobs
-            else:
-                deferred.append("prompt_logprobs")
-            if args.stop_token_ids:
-                sent["stop_token_ids"] = args.stop_token_ids
-            else:
-                deferred.append("stop_token_ids")
-            if args.allowed_token_ids:
-                sent["allowed_token_ids"] = args.allowed_token_ids
-            else:
-                deferred.append("allowed_token_ids")
-            if args.stop_strings:
-                sent["stop"] = args.stop_strings
-            else:
-                deferred.append("stop_strings")
-            if args.repetition_penalty not in (None, 1.0):
-                sent["repetition_penalty"] = args.repetition_penalty
-            else:
-                deferred.append("repetition_penalty")
-            if args.presence_penalty not in (None, 0.0):
-                sent["presence_penalty"] = args.presence_penalty
-            else:
-                deferred.append("presence_penalty")
-            if args.frequency_penalty not in (None, 0.0):
-                sent["frequency_penalty"] = args.frequency_penalty
-            else:
-                deferred.append("frequency_penalty")
-            if args.seed is not None:
-                sent["seed"] = args.seed
-            else:
-                deferred.append("seed")
-            for k in ("typical_p", "max_time"):
-                if getattr(args, k, None) is not None:
-                    ignored.append(k)
-            if args.num_beams not in (None, 1):
-                ignored.append("num_beams")
-            if args.no_repeat_ngram_size not in (None, 0):
-                ignored.append("no_repeat_ngram_size")
-            for k in ("use_8bit", "use_4bit"):
-                if getattr(args, k, None):
-                    ignored.append(k)
+        if self.turn_records:
+            data = dict(self.turn_records[-1].knobs or {})
         else:
-            keys = ["max_new_tokens", "temperature", "top_p", "top_k", "stop_strings", "ollama_think"]
-            sent = {}
-            if "temperature" in user_set and args.temperature is not None:
-                sent["options.temperature"] = args.temperature
-            if "top_p" in user_set and args.top_p is not None:
-                sent["options.top_p"] = args.top_p
-            if "top_k" in user_set and args.top_k is not None:
-                sent["options.top_k"] = args.top_k
-            if "max_new_tokens" in user_set and args.max_new_tokens is not None:
-                sent["options.num_predict"] = args.max_new_tokens
-            if "stop_strings" in user_set and args.stop_strings is not None:
-                sent["options.stop"] = args.stop_strings
-            if args.ollama_think in {"true", "false"}:
-                sent["think"] = (args.ollama_think == "true")
-            deferred = []
-            if "options.temperature" not in sent:
-                deferred.append("temperature")
-            if "options.top_p" not in sent:
-                deferred.append("top_p")
-            if "options.top_k" not in sent:
-                deferred.append("top_k")
-            if "options.num_predict" not in sent:
-                deferred.append("max_new_tokens")
-            if "options.stop" not in sent:
-                deferred.append("stop_strings")
-            if "think" not in sent:
-                deferred.append("ollama_think(auto)")
+            data = build_intent_knobs(args, self.runtime.session.backend_name)
 
-        lines = ["sent.*"]
+        sent = dict(data.get("sent") or {})
+        deferred = list(data.get("deferred") or [])
+        ignored = list(data.get("ignored") or [])
+        notes = list(data.get("notes") or [])
+
+        lines = []
+        mode = data.get("mode")
+        if mode:
+            lines.append(f"mode: {mode}")
+        lines.append("sent.*")
         if sent:
             lines.extend([f"  {k}: {v!r}" for k, v in sent.items()])
         else:
             lines.append("  (none)")
-        data = {
-            "sent": sent,
-            "deferred": deferred,
-            "ignored": ignored,
-        }
         if self._show_opts().verbose:
             lines.append("deferred")
             if deferred:
@@ -1362,6 +1206,19 @@ class UnifiedTuiApp(App):
                 lines.extend([f"  {k}" for k in ignored])
             else:
                 lines.append("  (none)")
+            if notes:
+                lines.append("notes")
+                lines.extend([f"  {row}" for row in notes])
+        else:
+            lines.append(f"deferred: {deferred if deferred else []}")
+            lines.append(f"ignored: {ignored if ignored else []}")
+
+        if self._show_opts().verbose:
+            data["args"] = {
+                key: ("***" if key.endswith("api_key") or key == "api_key" else value)
+                for key, value in vars(args).items()
+                if not key.startswith("_")
+            }
         return self._to_json_or_lines(data, lines)
 
     def _show_ui(self, argv: list[str]) -> str:
@@ -1408,15 +1265,31 @@ class UnifiedTuiApp(App):
         if not self.turn_records:
             return "No completed turns yet."
         last = self.turn_records[-1]
+        token_counts = self._token_counts_view(last)
+        context = self._context_view(last)
         data = {
             "backend": last.backend,
             "model_id": last.model_id,
             "ended_in_think": last.ended_in_think,
             "elapsed": last.timing.get("elapsed"),
-            "len_raw": len(last.raw),
-            "len_think": len(last.think),
-            "len_answer": len(last.answer),
+            "chars_raw": len(last.raw),
+            "chars_think": len(last.think),
+            "chars_answer": len(last.answer),
+            "prompt_tokens": token_counts["prompt_tokens"],
+            "completion_tokens": token_counts["completion_tokens"],
+            "total_tokens": token_counts["total_tokens"],
+            "tokens_per_s": self._tokens_per_s_view(last),
+            "context": context,
+            "tool_activity_count": len(last.tool_activity or []),
         }
+        finish_reason = None
+        if isinstance(last.gen, dict):
+            finish_reason = last.gen.get("finish_reason")
+        if finish_reason is not None:
+            data["finish_reason"] = finish_reason
+        data["len_raw"] = data["chars_raw"]
+        data["len_think"] = data["chars_think"]
+        data["len_answer"] = data["chars_answer"]
         lines = [f"{k}: {v}" for k, v in data.items()]
         if self._show_opts().verbose:
             data["raw"] = last.raw
@@ -1510,6 +1383,29 @@ class UnifiedTuiApp(App):
                 lines.append(f"{key}: {extra[key]}")
         return self._to_json_or_lines(data, lines)
 
+    def _show_tools(self, argv: list[str]) -> str:
+        del argv
+        runtime = build_tool_runtime(self.runtime.args, self.runtime.session.backend_name)
+        data = runtime.describe(verbose=self._show_opts().verbose)
+        lines = [
+            f"backend: {data['backend']}",
+            f"supported_backend: {data['supported_backend']}",
+            f"enabled: {data['enabled']}",
+            f"mode: {data['mode']}",
+            f"schema_file: {data['schema_file'] or '(none)'}",
+            f"allow: {data['allow']}",
+            f"deny: {data['deny']}",
+            f"max_calls_per_turn: {data['max_calls_per_turn']}",
+            f"timeout_s: {data['timeout_s']}",
+            f"max_result_chars: {data['max_result_chars']}",
+            f"tool_names: {data['tool_names']}",
+        ]
+        if self._show_opts().verbose:
+            lines.append("available_tools:")
+            for name, item in sorted((data.get("available_tools") or {}).items()):
+                lines.append(f"  {name}: source={item['source']} executable={item['executable']}")
+        return self._to_json_or_lines(data, lines)
+
     def _show_logs(self, argv: list[str]) -> str:
         n = 0
         filt = ""
@@ -1545,7 +1441,7 @@ class UnifiedTuiApp(App):
         logs_fn = getattr(session, "get_recent_logs", None)
         if not callable(logs_fn):
             return f"Backend '{session.backend_name}' does not expose in-memory logs."
-        rows = logs_fn(n)
+        rows = logs_fn(n, None)
         if filt:
             rows = [r for r in rows if filt in r]
 
@@ -1553,6 +1449,13 @@ class UnifiedTuiApp(App):
         key = f"{session.backend_name}_log_file"
         configured_log_file = getattr(args, key, "") if hasattr(args, key) else ""
         lines = [f"backend: {session.backend_name}", f"requested_n: {n}", f"filter: {filt or '(none)'}"]
+        list_sources_fn = getattr(session, "list_log_sources", None)
+        if callable(list_sources_fn):
+            try:
+                sources = list_sources_fn()
+            except Exception:
+                sources = []
+            lines.append(f"available_sources: {', '.join(sources) if sources else '(none)'}")
         if configured_log_file:
             lines.append(f"log_file: {configured_log_file}")
         else:
@@ -1636,7 +1539,7 @@ class UnifiedTuiApp(App):
 
     def _drain_events(self):
         processed = 0
-        pending_think_token_inc = 0
+        pending_generated_token_inc = 0
         while processed < self._max_events_per_tick:
             try:
                 ev = self.event_queue.get_nowait()
@@ -1645,19 +1548,21 @@ class UnifiedTuiApp(App):
             processed += 1
 
             if isinstance(ev, TurnStart):
+                if getattr(ev, "turn_id", None) == self.pending_turn_id and self.pending_assistant is not None:
+                    self.pending_assistant.start_turn()
                 continue
 
             if getattr(ev, "turn_id", None) != self.pending_turn_id or self.pending_assistant is None:
                 continue
 
             if isinstance(ev, Meta):
-                if ev.key == "think_tokens_inc":
-                    pending_think_token_inc += int(ev.value)
+                if ev.key == "generated_tokens_inc":
+                    pending_generated_token_inc += int(ev.value)
                 continue
 
-            if pending_think_token_inc:
-                self.pending_assistant.add_think_tokens(pending_think_token_inc)
-                pending_think_token_inc = 0
+            if pending_generated_token_inc:
+                self.pending_assistant.add_generated_tokens(pending_generated_token_inc)
+                pending_generated_token_inc = 0
 
             if isinstance(ev, ThinkDelta):
                 self.pending_assistant.append_think(ev.text)
@@ -1669,15 +1574,16 @@ class UnifiedTuiApp(App):
                     self._request_scroll_end()
             elif isinstance(ev, Error):
                 self.pending_assistant.append_answer(f"\n[Generation error] {ev.message}")
-                self.pending_assistant.finish(ended_in_think=False)
+                self.pending_assistant.thinking_panel.finish(ended_in_think=False)
                 self.is_generating = False
             elif isinstance(ev, Finish):
                 record = ev.record
-                self.pending_assistant.finish(ended_in_think=record.ended_in_think)
+                self.pending_assistant.finish(record)
                 if record.trimmed_messages is not None:
                     self.messages = list(record.trimmed_messages)
-                assistant_for_history = record.answer if record.answer else record.think
-                self.messages.append({"role": "assistant", "content": assistant_for_history})
+                else:
+                    assistant_for_history = record.answer if record.answer else record.think
+                    self.messages.append({"role": "assistant", "content": assistant_for_history})
                 self.turn_records.append(record)
                 if self.runtime.args.save_transcript:
                     self._append_transcript_record(record)
@@ -1685,8 +1591,8 @@ class UnifiedTuiApp(App):
                 if self._should_autofollow():
                     self._request_scroll_end()
 
-        if pending_think_token_inc and self.pending_assistant is not None:
-            self.pending_assistant.add_think_tokens(pending_think_token_inc)
+        if pending_generated_token_inc and self.pending_assistant is not None:
+            self.pending_assistant.add_generated_tokens(pending_generated_token_inc)
         if processed > 0:
             self.transcript.refresh(layout=True)
 

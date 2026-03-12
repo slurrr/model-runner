@@ -1,4 +1,4 @@
-# Tool Calls pre the model itself
+# Tool Calls per the model itself 
 
 Here's how you can integrate me with **OpenClaw** and your **vLLM** setup:
 
@@ -79,10 +79,3 @@ To optimize for tool call performance, consider:
 "seed": 42
 "disable_log_stats": true
 ```
-
-### 6. What I Need from You
-To make this work smoothly:
-- Share your **OpenClaw version** (for schema compatibility)
-- Share your **tool schema structure** (I'll tailor my responses)
-- Confirm your **vLLM + OpenAI API** endpoint is accessible
-- (Optional) Share a **sample tool call** (I'll validate

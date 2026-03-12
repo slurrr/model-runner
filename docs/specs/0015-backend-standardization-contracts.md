@@ -131,7 +131,40 @@ Capability:
 
 Rules:
 - If `server_owned_template`, `chat_template` must be reported as ignored (or “unsupported”) and must not claim to have taken effect.
-- History sanitization rules (e.g., stripping `<think>...</think>` from the text we re-feed) are only applied when the repo controls the template.
+- History sanitization rules (e.g., stripping `<think>...</think>` from the text we re-feed) apply to the **messages we send on future turns**,
+  regardless of template control level.
+  - This is a message-history policy, not a template-formatting policy.
+  - It does not retroactively change what a model “already saw” in a completed turn; it only affects future requests.
+
+## Contract: Context management (must)
+Backends must converge on the same user-facing context-fit behavior even if the implementation mechanism differs.
+
+Required user-visible effect:
+- Drop oldest prior conversation history first when context must be reduced.
+- Preserve the current user turn.
+- Preserve the system message when possible.
+- Reserve room for generation instead of filling the entire context with prompt/history.
+- Report when trimming happened.
+
+Required retention/trim order:
+- Keep the system message if present, on a best-effort basis.
+- Keep the current user turn.
+- Drop oldest prior `user` / `assistant` / `tool` turns first.
+- Only fail once no more droppable history remains and the request still cannot fit.
+
+Failure behavior:
+- If the request still cannot fit after history trimming, raise a clear “input too large even after history trimming” style error.
+- Do not misreport this as “increase max_new_tokens” unless the real issue is specifically the requested generation budget.
+
+Implementation allowance:
+- Exact token preflight is preferred.
+- Acceptable implementations may also use backend-native counters, server-supported truncation controls, or deterministic retry-on-overflow with oldest-turn dropping.
+- The exact mechanism is backend-specific; the required outcome is repo-consistent UX.
+
+Reporting:
+- Backends must emit/report when history trimming was applied.
+- Backends must report if the system message was dropped or could not be preserved.
+- If exact counts are knowable, report how many messages were dropped.
 
 ## Rollout plan
 This spec is an umbrella contract. Implementation should be delivered in separate phased specs/PRs:
@@ -139,4 +172,3 @@ This spec is an umbrella contract. Implementation should be delivered in separat
 2. Knob mapping (sent/deferred/ignored)
 3. Logging unification (ring buffer parity + `/show logs`)
 4. Template control standardization (`chat_template` + capability gating)
-

@@ -3,11 +3,11 @@ id = "gemma-3-27b-it-abliterated-exl2"
 
 [gen]
 frequency_penalty = 0.0
-max_new_tokens = 2048
+max_new_tokens = 8192
 presence_penalty = 0.0
 repetition_penalty = 1.025
 stream = true
-temperature = 0.7
+temperature = 0.6
 top_k = 64
 top_p = 0.9
 
@@ -15,11 +15,12 @@ top_p = 0.9
 chat_template = "models/gemma-3-27b-it-abliterated-exl2/exl2/templates/gemma_chat_sanitized.jinja"
 prompt_mode = "chat"
 system = ""
-system_file = "models/gemma-3-27b-it-abliterated-exl2/exl2/prompts/system.txt"
+system_file = ""
 user_prefix = ""
 
 [ui]
 assume_think = true
+history_strip_think = false
 no_animate_thinking = false
 save_transcript = ""
 capture_last_request = false
@@ -27,6 +28,16 @@ scroll_lines = 9
 show_thinking = true
 ui_max_events_per_tick = 33
 ui_tick_ms = 33
+
+[tools]
+enabled = false
+mode = "dry_run"
+schema_file = ""
+allow = []
+deny = []
+max_calls_per_turn = 3
+timeout_s = 10
+max_result_chars = 8000
 
 [backend.exl2]
 cache_type = "fp16"
@@ -36,6 +47,7 @@ exl2_stop_tokens = ["<end_of_turn>", "<start_of_turn>"]
 gpu_split = ""
 log_file = ""
 low_mem = false
-max_seq_len = 10240
+max_seq_len = 32768
 min_free_tokens = 256
 model_path = "~/ml/models"
+flash_attn = true

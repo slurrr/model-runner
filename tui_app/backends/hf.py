@@ -23,7 +23,10 @@ except Exception:
     AutoModelForImageTextToText = None  # type: ignore
 
 from tui_app.backends.base import EventEmitter
+from tui_app.context_policy import build_context_limit_error, reserve_generation_tokens, trim_messages_to_budget
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnRecord, TurnStart
+from tui_app.history_control import append_assistant_history
+from tui_app.knobs import SUPPORTED_KNOBS, finalize_knob_report, unsupported_user_set
 from tui_app.log_file import FileLogger
 from tui_app.think_router import ThinkRouter
 
@@ -253,32 +256,59 @@ def build_model_inputs_multimodal(processor, messages: list[dict[str, object]]):
     return processor(text=prompt, return_tensors="pt"), messages_mm
 
 
-def apply_context_limit(tokenizer, messages, max_context_tokens, prompt_mode, *, processor=None, multimodal: bool = False):
-    if not max_context_tokens:
+def _infer_context_window(model, tokenizer) -> int | None:
+    candidates = [
+        getattr(getattr(model, "config", None), "max_position_embeddings", None),
+        getattr(getattr(model, "config", None), "n_positions", None),
+        getattr(getattr(model, "config", None), "max_seq_len", None),
+        getattr(getattr(model, "config", None), "seq_length", None),
+        getattr(getattr(getattr(model, "config", None), "text_config", None), "max_position_embeddings", None),
+        getattr(tokenizer, "model_max_length", None),
+    ]
+    for value in candidates:
+        if isinstance(value, int) and 0 < value < 1_000_000:
+            return int(value)
+    return None
+
+
+def apply_context_limit(
+    tokenizer,
+    messages,
+    max_context_tokens,
+    prompt_mode,
+    *,
+    max_new_tokens: int | None,
+    model=None,
+    processor=None,
+    multimodal: bool = False,
+):
+    context_window = int(max_context_tokens) if max_context_tokens else _infer_context_window(model, tokenizer)
+    if not context_window:
         if multimodal and processor is not None:
             inputs, _ = build_model_inputs_multimodal(processor=processor, messages=messages)
-            return inputs, messages
-        return build_model_inputs(tokenizer=tokenizer, messages=messages, prompt_mode=prompt_mode), messages
+            return inputs, messages, None
+        return build_model_inputs(tokenizer=tokenizer, messages=messages, prompt_mode=prompt_mode), messages, None
 
-    trimmed = list(messages)
-    while True:
+    reserved = reserve_generation_tokens(context_window, max_new_tokens)
+
+    def _measure(trimmed):
         if multimodal and processor is not None:
             candidate_inputs, _ = build_model_inputs_multimodal(processor=processor, messages=trimmed)
         else:
             candidate_inputs = build_model_inputs(tokenizer=tokenizer, messages=trimmed, prompt_mode=prompt_mode)
         input_len = candidate_inputs["input_ids"].shape[-1]
-        if input_len <= max_context_tokens:
-            return candidate_inputs, trimmed
+        return int(input_len), candidate_inputs
 
-        drop_idx = None
-        start_idx = 1 if trimmed and trimmed[0].get("role") == "system" else 0
-        for idx in range(start_idx, len(trimmed)):
-            if trimmed[idx].get("role") in {"user", "assistant", "tool"}:
-                drop_idx = idx
-                break
-        if drop_idx is None:
-            return candidate_inputs, trimmed
-        trimmed.pop(drop_idx)
+    trimmed, _prompt_tokens, model_inputs, report = trim_messages_to_budget(
+        list(messages),
+        measure_fn=_measure,
+        context_window=context_window,
+        reserved_generation_tokens=reserved,
+        strategy="exact_preflight",
+    )
+    if not report.fit:
+        raise RuntimeError(build_context_limit_error(report))
+    return model_inputs, trimmed, report.to_dict()
 
 
 class TokenCountingTextIteratorStreamer(BaseStreamer):
@@ -297,6 +327,7 @@ class TokenCountingTextIteratorStreamer(BaseStreamer):
         self.token_cache = []
         self.print_len = 0
         self.next_tokens_are_prompt = True
+        self.generated_token_count = 0
         self.mode = "think" if assume_think else "answer"
         self.start_marker_ids = self._single_token_marker_ids(
             ["<think>", "<|begin_of_thought|>", "<｜begin_of_thought｜>", "<｜begin▁of▁thought｜>"]
@@ -338,6 +369,7 @@ class TokenCountingTextIteratorStreamer(BaseStreamer):
             return
 
         token_ids = value.tolist()
+        self.generated_token_count += len(token_ids)
         think_inc = 0
         for token_id in token_ids:
             if token_id in self.start_marker_ids:
@@ -412,6 +444,7 @@ class HFSession:
         *,
         processor=None,
         supports_images: bool = False,
+        template_info: dict[str, object] | None = None,
         logger: FileLogger | None = None,
     ):
         self.model = model
@@ -421,16 +454,29 @@ class HFSession:
         self.input_device = input_device
         self.resolved_model_id = resolved_model_id
         self.supports_images = supports_images
+        self.template_info = dict(template_info or {})
         self.logger = logger
 
     def close(self) -> None:
         if self.logger is not None:
             self.logger.close()
 
-    def get_recent_logs(self, n: int = 80) -> list[str]:
+    def get_recent_logs(self, n: int = 80, sources: list[str] | None = None) -> list[str]:
         if self.logger is None:
             return []
-        return self.logger.get_recent_logs(n=n)
+        return self.logger.get_recent_logs(n=n, sources=sources)
+
+    def list_log_sources(self) -> list[str]:
+        if self.logger is None:
+            return []
+        return self.logger.list_log_sources()
+
+    def describe(self) -> dict[str, object]:
+        return {
+            "template_control_level": "local_template",
+            "supports_images": self.supports_images,
+            **self.template_info,
+        }
 
     def generate_turn(self, turn_id: int, messages: list[dict[str, object]], emit: EventEmitter) -> None:
         args = self.args
@@ -448,7 +494,8 @@ class HFSession:
             if self.logger is not None:
                 self.logger.log(
                     f"turn_start id={turn_id} messages={len(messages)} stream={bool(args.stream)} "
-                    f"max_new_tokens={args.max_new_tokens}"
+                    f"max_new_tokens={args.max_new_tokens}",
+                    source="backend",
                 )
             multimodal = bool(self.supports_images and any(msg.get("images") for msg in messages))
             if multimodal and self.processor is None:
@@ -456,11 +503,13 @@ class HFSession:
             if multimodal and args.prompt_mode != "chat":
                 raise RuntimeError("Images require --prompt-mode chat.")
 
-            model_inputs, trimmed = apply_context_limit(
+            model_inputs, trimmed, context_report = apply_context_limit(
                 tokenizer=tokenizer,
                 messages=messages,
                 max_context_tokens=args.max_context_tokens,
                 prompt_mode=args.prompt_mode,
+                max_new_tokens=args.max_new_tokens,
+                model=model,
                 processor=self.processor,
                 multimodal=multimodal,
             )
@@ -468,6 +517,8 @@ class HFSession:
                 key: value.to(self.input_device) if hasattr(value, "to") else value
                 for key, value in model_inputs.items()
             }
+            prompt_tokens = int(model_inputs["input_ids"].shape[-1])
+            emit(Meta(turn_id=turn_id, key="prompt_tokens", value=prompt_tokens))
 
             pad_token_id = tokenizer.eos_token_id
             if pad_token_id is None and tokenizer.pad_token_id is not None:
@@ -496,6 +547,30 @@ class HFSession:
                 generate_kwargs["stop_strings"] = args.stop_strings
                 generate_kwargs["tokenizer"] = tokenizer
 
+            knob_sent = {
+                "max_new_tokens": args.max_new_tokens,
+                "temperature": args.temperature,
+                "top_p": args.top_p,
+                "repetition_penalty": args.repetition_penalty,
+                "num_beams": args.num_beams,
+                "no_repeat_ngram_size": args.no_repeat_ngram_size,
+            }
+            if "top_k" in generate_kwargs:
+                knob_sent["top_k"] = args.top_k
+            if "typical_p" in generate_kwargs:
+                knob_sent["typical_p"] = args.typical_p
+            if "min_p" in generate_kwargs:
+                knob_sent["min_p"] = args.min_p
+            if "max_time" in generate_kwargs:
+                knob_sent["max_time"] = args.max_time
+            if "stop_strings" in generate_kwargs:
+                knob_sent["stop_strings"] = args.stop_strings
+            knob_report = finalize_knob_report(
+                sent=knob_sent,
+                supported=SUPPORTED_KNOBS["hf"],
+                ignored=unsupported_user_set(args, "hf"),
+            )
+
             if args.stream:
                 streamer = TokenCountingTextIteratorStreamer(
                     tokenizer,
@@ -520,15 +595,13 @@ class HFSession:
                 gen_thread = threading.Thread(target=_generate, daemon=True)
                 gen_thread.start()
 
+                emitted_generated_tokens = 0
                 for piece in streamer:
-                    while True:
-                        try:
-                            count = streamer.think_token_queue.get_nowait()
-                        except queue.Empty:
-                            break
-                        if count is None:
-                            break
-                        emit(Meta(turn_id=turn_id, key="think_tokens_inc", value=int(count)))
+                    current_generated_tokens = int(getattr(streamer, "generated_token_count", 0))
+                    token_inc = current_generated_tokens - emitted_generated_tokens
+                    if token_inc > 0:
+                        emit(Meta(turn_id=turn_id, key="generated_tokens_inc", value=token_inc))
+                        emitted_generated_tokens = current_generated_tokens
 
                     raw_parts.append(piece)
                     for channel, text in router.feed(piece):
@@ -542,21 +615,20 @@ class HFSession:
                 gen_thread.join()
                 if gen_error:
                     raise RuntimeError(str(gen_error[0]))
+                completion_tokens = int(getattr(streamer, "generated_token_count", 0))
             else:
                 input_len = model_inputs["input_ids"].shape[-1]
                 with torch.no_grad():
                     outputs = model.generate(**model_inputs, **generate_kwargs)
                 new_tokens = outputs[0, input_len:].tolist()
+                completion_tokens = len(new_tokens)
                 for token_id in new_tokens:
+                    emit(Meta(turn_id=turn_id, key="generated_tokens_inc", value=1))
                     piece = tokenizer.decode(
                         [token_id],
                         skip_special_tokens=True,
                         clean_up_tokenization_spaces=False,
                     )
-                    pre_mode = router.mode
-                    is_marker = piece in router.start_markers or piece in router.end_markers
-                    if pre_mode == "think" and not is_marker:
-                        emit(Meta(turn_id=turn_id, key="think_tokens_inc", value=1))
                     raw_parts.append(piece)
                     for channel, text in router.feed(piece):
                         if channel == "think":
@@ -565,6 +637,10 @@ class HFSession:
                         else:
                             answer_parts.append(text)
                             emit(AnswerDelta(turn_id=turn_id, text=text))
+
+            total_tokens = prompt_tokens + int(completion_tokens)
+            emit(Meta(turn_id=turn_id, key="completion_tokens", value=int(completion_tokens)))
+            emit(Meta(turn_id=turn_id, key="total_tokens", value=total_tokens))
 
             for channel, text in router.flush():
                 if channel == "think":
@@ -575,10 +651,15 @@ class HFSession:
                     emit(AnswerDelta(turn_id=turn_id, text=text))
 
             ended = time.time()
+            elapsed = max(0.0, ended - started)
+            throughput = None
+            if completion_tokens > 0 and elapsed > 0:
+                throughput = {"tokens_per_s": completion_tokens / elapsed}
+            answer_text = "".join(answer_parts)
             record = TurnRecord(
                 raw="".join(raw_parts),
                 think="".join(think_parts),
-                answer="".join(answer_parts).strip(),
+                answer=answer_text,
                 ended_in_think=(router.mode == "think"),
                 backend=self.backend_name,
                 model_id=self.resolved_model_id,
@@ -589,18 +670,32 @@ class HFSession:
                     "top_k": args.top_k,
                     "repetition_penalty": args.repetition_penalty,
                 },
-                timing={"start": started, "end": ended, "elapsed": max(0.0, ended - started)},
-                trimmed_messages=trimmed,
+                timing={"start": started, "end": ended, "elapsed": elapsed},
+                token_counts={
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": int(completion_tokens),
+                    "total_tokens": total_tokens,
+                },
+                throughput=throughput,
+                knobs=knob_report,
+                context=context_report,
+                trimmed_messages=append_assistant_history(
+                    list(trimmed),
+                    think="".join(think_parts),
+                    answer=answer_text,
+                    strip_think=bool(args.history_strip_think),
+                ),
             )
             emit(Finish(turn_id=turn_id, record=record))
             if self.logger is not None:
                 self.logger.log(
                     f"turn_finish id={turn_id} elapsed_s={record.timing.get('elapsed', 0):.3f} "
-                    f"think_chars={len(record.think)} answer_chars={len(record.answer)}"
+                    f"think_chars={len(record.think)} answer_chars={len(record.answer)}",
+                    source="backend",
                 )
         except Exception as exc:
             if self.logger is not None:
-                self.logger.log(f"turn_error id={turn_id} error={exc}")
+                self.logger.log(f"turn_error id={turn_id} error={exc}", source="backend")
             emit(Error(turn_id=turn_id, message=str(exc)))
 
 
@@ -609,11 +704,11 @@ def create_session(args: argparse.Namespace) -> HFSession:
     dtype = resolve_dtype(args.dtype, device)
 
     resolved_model_id = resolve_model_id(args.model_id)
-    logger = FileLogger.from_value(getattr(args, "hf_log_file", ""), "hf")
+    logger = FileLogger.from_value(getattr(args, "hf_log_file", ""), "backend", config_path=getattr(args, "_config_path", None))
     print(f"Loading model: {resolved_model_id}")
     print(f"Using device={device}, dtype={dtype}")
     if logger is not None:
-        logger.log(f"session_init model={resolved_model_id} device={device} dtype={dtype}")
+        logger.log(f"session_init model={resolved_model_id} device={device} dtype={dtype}", source="app")
 
     model_type = read_model_type(resolved_model_id)
     if model_type == "personaplex":
@@ -624,6 +719,20 @@ def create_session(args: argparse.Namespace) -> HFSession:
     tokenizer = load_tokenizer(resolved_model_id)
     supports_images = is_vision_checkpoint(resolved_model_id)
     processor = None
+    requested_template = (args.chat_template or "").strip()
+    template_requested_value = requested_template
+    if requested_template:
+        try:
+            candidate = resolve_path_maybe_relative(requested_template, config_path=args._config_path)
+            if os.path.isfile(candidate):
+                template_requested_value = candidate
+        except Exception:
+            pass
+    template_info = {
+        "chat_template_requested": template_requested_value,
+        "chat_template_applied": False,
+        "chat_template_reason": "empty_default" if not requested_template else "ignored_prompt_mode",
+    }
     if supports_images:
         try:
             processor = AutoProcessor.from_pretrained(resolved_model_id)
@@ -639,8 +748,25 @@ def create_session(args: argparse.Namespace) -> HFSession:
                 except Exception:
                     pass
             print(f"Chat template override: {args.chat_template}")
+            template_info = {
+                "chat_template_requested": template_requested_value,
+                "chat_template_applied": True,
+                "chat_template_reason": "applied",
+            }
+        elif not requested_template:
+            template_info = {
+                "chat_template_requested": template_requested_value,
+                "chat_template_applied": False,
+                "chat_template_reason": "empty_default",
+            }
         if tokenizer.chat_template is None:
             raise RuntimeError("Tokenizer has no chat template. Use --prompt-mode plain or set --chat-template.")
+    elif requested_template:
+        template_info = {
+            "chat_template_requested": template_requested_value,
+            "chat_template_applied": False,
+            "chat_template_reason": "ignored_prompt_mode",
+        }
 
     model_kwargs = {}
     input_device = device
@@ -694,5 +820,6 @@ def create_session(args: argparse.Namespace) -> HFSession:
         resolved_model_id=resolved_model_id,
         processor=processor,
         supports_images=supports_images,
+        template_info=template_info,
         logger=logger,
     )

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import collections
 import os
 import shlex
 import shutil
@@ -16,8 +15,15 @@ import urllib.request
 
 from config_utils import apply_machine_model_root, load_config_layers
 from tui_app.backends.base import EventEmitter
-from tui_app.events import Error
+from tui_app.context_policy import build_context_limit_error, reserve_generation_tokens, trim_messages_to_budget
+from tui_app.events import Error, Finish, TurnStart
+from tui_app.log_file import FileLogger
 from tui_app.transports.openai_http import OpenAIHTTPSession, normalize_openai_base_url
+
+try:
+    from transformers import AutoTokenizer
+except Exception:  # pragma: no cover - transformers is a required runtime elsewhere in this repo
+    AutoTokenizer = None  # type: ignore
 
 
 def _resolve_api_key(args: argparse.Namespace) -> str:
@@ -74,25 +80,31 @@ def _resolve_model_from_models_endpoint(base_url: str, *, timeout_s: float, api_
     )
 
 
+def _supports_chat_template_flag(cmd_argv: list[str]) -> bool:
+    probe = list(cmd_argv)
+    if "serve" in probe:
+        probe = probe[: probe.index("serve") + 1]
+    else:
+        probe.append("serve")
+    probe.append("--help")
+    try:
+        out = subprocess.check_output(probe, text=True, stderr=subprocess.STDOUT, timeout=8)
+    except Exception:
+        return False
+    return "--chat-template" in out
+
+
 class _StreamTail:
-    def __init__(self, prefix: str, lines: collections.deque[str], tee_fh=None):
-        self.prefix = prefix
-        self.lines = lines
-        self.tee_fh = tee_fh
+    def __init__(self, logger: FileLogger, source: str):
+        self.logger = logger
+        self.source = source
 
     def pump(self, stream) -> None:
         try:
             for line in iter(stream.readline, ""):
                 if not line:
                     break
-                entry = f"[{self.prefix}] {line.rstrip()}"
-                self.lines.append(entry)
-                if self.tee_fh is not None:
-                    try:
-                        self.tee_fh.write(entry + "\n")
-                        self.tee_fh.flush()
-                    except Exception:
-                        pass
+                self.logger.log(line.rstrip(), source=self.source)
         except Exception:
             return
         finally:
@@ -113,16 +125,17 @@ class VLLMSession:
         base_url: str,
         resolved_model_id: str,
         api_key: str,
-        log_lines: collections.deque[str],
-        log_file_handle=None,
+        template_info: dict[str, object],
+        logger: FileLogger,
+        tokenizer=None,
     ):
         self.args = args
         self._process = process
         self._launch_argv = launch_argv
         self._base_url = base_url
-        self._log_lines = log_lines
+        self.logger = logger
         self._closed = False
-        self._log_file_handle = log_file_handle
+        self._tokenizer = tokenizer
         self._transport = OpenAIHTTPSession(
             args=args,
             resolved_model_id=resolved_model_id,
@@ -130,6 +143,8 @@ class VLLMSession:
             api_key=api_key,
             timeout_s=float(args.vllm_timeout_s),
             backend_name="vllm",
+            template_info=template_info,
+            logger=logger,
         )
         self.resolved_model_id = resolved_model_id
 
@@ -140,12 +155,11 @@ class VLLMSession:
         info["launch_argv"] = " ".join(shlex.quote(part) for part in self._launch_argv)
         return info
 
-    def get_recent_logs(self, n: int = 80) -> list[str]:
-        size = max(1, int(n))
-        data = list(self._log_lines)
-        if size >= len(data):
-            return data
-        return data[-size:]
+    def get_recent_logs(self, n: int = 80, sources: list[str] | None = None) -> list[str]:
+        return self.logger.get_recent_logs(n=n, sources=sources)
+
+    def list_log_sources(self) -> list[str]:
+        return self.logger.list_log_sources()
 
     def get_last_request(self) -> dict | None:
         getter = getattr(self._transport, "get_last_request", None)
@@ -153,9 +167,111 @@ class VLLMSession:
             return getter()
         return None
 
+    @staticmethod
+    def _sanitize_messages_for_preflight(messages: list[dict[str, object]]) -> list[dict[str, object]] | None:
+        clean: list[dict[str, object]] = []
+        for msg in messages:
+            role = str(msg.get("role", "") or "").strip()
+            if role not in {"system", "user", "assistant", "tool"}:
+                continue
+            images = msg.get("images")
+            if isinstance(images, list) and images:
+                return None
+            content_obj = msg.get("content")
+            clean_msg: dict[str, object] = {
+                "role": role,
+                "content": content_obj if content_obj is None or isinstance(content_obj, str) else str(content_obj),
+            }
+            tool_calls = msg.get("tool_calls")
+            if role == "assistant" and isinstance(tool_calls, list):
+                clean_msg["tool_calls"] = tool_calls
+            tool_call_id = msg.get("tool_call_id")
+            if role == "tool" and isinstance(tool_call_id, str) and tool_call_id.strip():
+                clean_msg["tool_call_id"] = tool_call_id.strip()
+            clean.append(clean_msg)
+        return clean
+
+    def _preflight_context(self, messages: list[dict[str, object]]) -> tuple[list[dict[str, object]], dict[str, object] | None]:
+        tokenizer = self._tokenizer
+        if tokenizer is None or getattr(tokenizer, "chat_template", None) is None:
+            return list(messages), None
+        clean = self._sanitize_messages_for_preflight(messages)
+        if clean is None:
+            return list(messages), None
+
+        context_window = int(self.args.vllm_max_model_len or 0) or None
+        if context_window is None:
+            value = getattr(tokenizer, "model_max_length", None)
+            if isinstance(value, int) and 0 < value < 1_000_000:
+                context_window = int(value)
+        if context_window is None:
+            return list(messages), None
+
+        def _measure(trimmed: list[dict[str, object]]):
+            token_ids = tokenizer.apply_chat_template(
+                trimmed,
+                tokenize=True,
+                add_generation_prompt=True,
+            )
+            return int(len(token_ids)), None
+
+        reserved = reserve_generation_tokens(context_window, self.args.max_new_tokens)
+
+        trimmed, _prompt_tokens, _unused, report = trim_messages_to_budget(
+            clean,
+            measure_fn=_measure,
+            context_window=context_window,
+            reserved_generation_tokens=reserved,
+            strategy="exact_preflight",
+        )
+        if not report.fit:
+            raise RuntimeError(build_context_limit_error(report))
+        return list(trimmed), report.to_dict()
+
+    @staticmethod
+    def _merge_context_reports(
+        preflight: dict[str, object] | None,
+        fallback: dict[str, object] | None,
+        *,
+        token_counts: dict[str, int] | None,
+    ) -> dict[str, object] | None:
+        if preflight is None:
+            return fallback
+        if fallback is None:
+            return preflight
+        pre = dict(preflight)
+        post = dict(fallback)
+        combined_roles = list(pre.get("dropped_roles") or []) + list(post.get("dropped_roles") or [])
+        prompt_tokens = post.get("prompt_tokens")
+        if prompt_tokens is None and isinstance(token_counts, dict):
+            prompt_tokens = token_counts.get("prompt_tokens")
+        strategy = str(pre.get("strategy") or "exact_preflight")
+        post_dropped = int(post.get("dropped_messages") or 0)
+        if post_dropped > 0 or int(post.get("overflow_retries") or 0) > 0:
+            strategy = f"{strategy}+overflow_retry"
+        return {
+            "strategy": strategy,
+            "original_messages": pre.get("original_messages", post.get("original_messages")),
+            "kept_messages": post.get("kept_messages", pre.get("kept_messages")),
+            "dropped_messages": int(pre.get("dropped_messages") or 0) + post_dropped,
+            "dropped_roles": combined_roles,
+            "fit": post.get("fit", pre.get("fit")),
+            "context_window": pre.get("context_window", post.get("context_window")),
+            "reserved_generation_tokens": pre.get("reserved_generation_tokens", post.get("reserved_generation_tokens")),
+            "prompt_budget_tokens": pre.get("prompt_budget_tokens", post.get("prompt_budget_tokens")),
+            "prompt_tokens": prompt_tokens if prompt_tokens is not None else pre.get("prompt_tokens"),
+            "overflow_retries": post.get("overflow_retries", 0),
+            "system_message_present": pre.get("system_message_present", post.get("system_message_present")),
+            "system_message_preserved": bool(pre.get("system_message_preserved", True))
+            and bool(post.get("system_message_preserved", True)),
+            "system_drop_required": bool(pre.get("system_drop_required", False))
+            or bool(post.get("system_drop_required", False)),
+        }
+
     def generate_turn(self, turn_id: int, messages: list[dict[str, object]], emit: EventEmitter) -> None:
         if self._process.poll() is not None:
-            tail = "\n".join(self._log_lines) if self._log_lines else "(no captured logs)"
+            tail_rows = self.logger.get_recent_logs(40)
+            tail = "\n".join(tail_rows) if tail_rows else "(no captured logs)"
             emit(
                 Error(
                     turn_id=turn_id,
@@ -167,7 +283,30 @@ class VLLMSession:
                 )
             )
             return
-        self._transport.generate_turn(turn_id=turn_id, messages=messages, emit=emit)
+        emit(TurnStart(turn_id=turn_id))
+        try:
+            working_messages, preflight_context = self._preflight_context(messages)
+        except Exception as exc:
+            emit(Error(turn_id=turn_id, message=str(exc)))
+            return
+
+        def _forward(ev):
+            if isinstance(ev, TurnStart):
+                return
+            if isinstance(ev, Finish):
+                ev.record.context = self._merge_context_reports(
+                    preflight_context,
+                    ev.record.context,
+                    token_counts=ev.record.token_counts,
+                )
+            emit(ev)
+
+        self._transport.generate_turn(
+            turn_id=turn_id,
+            messages=working_messages,
+            emit=_forward,
+            emit_turn_start=False,
+        )
 
     def close(self) -> None:
         if self._closed:
@@ -198,11 +337,7 @@ class VLLMSession:
                 except Exception:
                     pass
 
-        try:
-            if self._log_file_handle is not None:
-                self._log_file_handle.close()
-        except Exception:
-            pass
+        self.logger.close()
 
 
 def _build_launch_argv(args: argparse.Namespace, host: str, port: int, model_id: str) -> list[str]:
@@ -244,6 +379,8 @@ def _build_launch_argv(args: argparse.Namespace, host: str, port: int, model_id:
         extra = shlex.split(extra)
     if isinstance(extra, list):
         launch.extend([str(x) for x in extra if str(x).strip()])
+    if "--enable-force-include-usage" not in launch:
+        launch.append("--enable-force-include-usage")
     return launch
 
 
@@ -310,19 +447,27 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
     api_key = _resolve_api_key(args)
 
     launch_argv = _build_launch_argv(args, host=host, port=port, model_id=model_id)
-    logs: collections.deque[str] = collections.deque(maxlen=80)
-    tee_handle = None
-    log_file = (getattr(args, "vllm_log_file", "") or "").strip()
-    if log_file:
-        log_path = os.path.abspath(os.path.expanduser(log_file))
-        parent = os.path.dirname(log_path)
-        if parent:
-            os.makedirs(parent, exist_ok=True)
-        tee_handle = open(log_path, "a", encoding="utf-8")
-        tee_handle.write(
-            f"[managed_vllm] launch_argv: {' '.join(shlex.quote(p) for p in launch_argv)}\n"
-        )
-        tee_handle.flush()
+    requested_template = (args.chat_template or "").strip()
+    template_requested_value = requested_template
+    template_applied = False
+    template_reason = "empty_default" if not requested_template else "unsupported_flag"
+    if requested_template:
+        cfg_path = (getattr(args, "_config_path", "") or "").strip()
+        candidate = os.path.abspath(os.path.expanduser(requested_template))
+        if cfg_path and not os.path.isabs(os.path.expanduser(requested_template)):
+            candidate = os.path.abspath(os.path.join(os.path.dirname(cfg_path), requested_template))
+        if os.path.isfile(candidate):
+            template_requested_value = candidate
+        if os.path.isfile(template_requested_value) and _supports_chat_template_flag(launch_argv):
+            launch_argv.extend(["--chat-template", template_requested_value])
+            template_applied = True
+            template_reason = "applied"
+    logger = FileLogger.from_value(
+        getattr(args, "vllm_log_file", ""),
+        "backend",
+        config_path=getattr(args, "_config_path", None),
+    )
+    logger.log(f"launch_argv: {' '.join(shlex.quote(p) for p in launch_argv)}", source="app")
 
     try:
         process = subprocess.Popen(
@@ -343,9 +488,9 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
         raise RuntimeError(f"Failed to launch vLLM process: {exc}") from exc
 
     if process.stdout is not None:
-        threading.Thread(target=_StreamTail("stdout", logs, tee_fh=tee_handle).pump, args=(process.stdout,), daemon=True).start()
+        threading.Thread(target=_StreamTail(logger, "engine_stdout").pump, args=(process.stdout,), daemon=True).start()
     if process.stderr is not None:
-        threading.Thread(target=_StreamTail("stderr", logs, tee_fh=tee_handle).pump, args=(process.stderr,), daemon=True).start()
+        threading.Thread(target=_StreamTail(logger, "engine_stderr").pump, args=(process.stderr,), daemon=True).start()
 
     try:
         _wait_until_ready(process, base_url=base_url, timeout_s=float(args.vllm_timeout_s), api_key=api_key)
@@ -356,7 +501,8 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
             served_model_name=(args.vllm_served_model_name or "").strip(),
         )
     except Exception as exc:
-        tail = "\n".join(logs) if logs else "(no captured logs)"
+        tail_rows = logger.get_recent_logs(40)
+        tail = "\n".join(tail_rows) if tail_rows else "(no captured logs)"
         lowered_tail = tail.lower()
         if process.poll() is not None and port != 0:
             if "address already in use" in lowered_tail or "already in use" in lowered_tail:
@@ -377,13 +523,36 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
             f"log_tail:\n{tail}"
         ) from exc
 
+    logger.log(f"backend_ready base_url={base_url} model={resolved_model_id}", source="backend")
+    tokenizer = None
+    if AutoTokenizer is not None:
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+        except Exception:
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False)
+            except Exception:
+                tokenizer = None
+    if tokenizer is not None and template_applied and os.path.isfile(str(template_requested_value)):
+        try:
+            with open(str(template_requested_value), "r", encoding="utf-8") as fh:
+                tokenizer.chat_template = fh.read()
+        except Exception:
+            pass
+
     return VLLMSession(
         args=args,
         process=process,
         launch_argv=launch_argv,
         base_url=base_url,
         resolved_model_id=resolved_model_id,
+        tokenizer=tokenizer,
         api_key=api_key,
-        log_lines=logs,
-        log_file_handle=tee_handle,
+        template_info={
+            "template_control_level": "managed_server_template",
+            "chat_template_requested": template_requested_value,
+            "chat_template_applied": template_applied,
+            "chat_template_reason": template_reason,
+        },
+        logger=logger,
     )

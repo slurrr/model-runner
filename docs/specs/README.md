@@ -18,3 +18,8 @@ Implementation specs for features we plan to add (kept lightweight and pragmatic
 - `docs/specs/0014-tui-status-and-show-inspect.md`: `/status` + a cleaner `/show` inspector UX for the TUI.
 - `docs/specs/0015-backend-standardization-contracts.md`: Umbrella contract for backend consistency (thinking, metrics, logging, knobs, templates).
 - `docs/specs/0016-token-accounting-and-real-toks.md`: Phase 1 spec to add real token counts and tok/s across backends.
+- `docs/specs/0017-tui-logging-ring-buffer.md`: Standardize session-owned in-memory log tail across all backends.
+- `docs/specs/0018-generation-knob-reporting.md`: Standardize per-turn reporting of sent/deferred/ignored generation knobs.
+- `docs/specs/0019-chat-template-and-history-control.md`: Best-effort repo-wide chat template control + think-stripping for history.
+- `docs/specs/0020-tui-mvp-tool-execution-harness.md`: Minimal, safe tool execution loop in the TUI (vLLM/OpenAI first).
+- `docs/specs/0021-safe-browser-tool-v1.md`: Fetch-only browser tool with SSRF + injection guardrails.

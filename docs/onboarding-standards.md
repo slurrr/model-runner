@@ -82,7 +82,25 @@ Every backend must:
 - expose `get_recent_logs()` for `/show logs`
 - redact secrets in any captured request output
 
-### 7. Config + templates + prompts
+### 7. Context management parity
+Every backend must implement repo-consistent context-fit behavior before hard context failures where feasible.
+
+Required UX:
+- preserve the current user turn
+- preserve the system message on a best-effort basis
+- drop oldest prior conversation turns first
+- reserve room for generation
+- report when trimming happened
+
+Allowed implementation strategies:
+- exact token-count preflight
+- backend-native counters/tokenization
+- server-side truncation controls
+- deterministic overflow-retry with oldest-turn dropping
+
+Backends must also report if the system message was dropped or could not be preserved.
+
+### 8. Config + templates + prompts
 Each backend must have a `_TEMPLATE` scaffold at:
 - `models/_TEMPLATE/<backend>/config/default.toml`
 - `models/_TEMPLATE/<backend>/notes/README.md`
@@ -93,7 +111,7 @@ If the backend supports local templating:
 - provide clear “template source” semantics (tokenizer_config.json vs inline vs override file)
 - document any sanitization rules (e.g., don’t re-feed `<think>` into history)
 
-### 8. Documentation requirements
+### 9. Documentation requirements
 For any non-trivial backend:
 - Add a spec under `docs/specs/` for the backend integration contract.
 - Add a decision under `docs/decisions/` for any repo-wide change (config format, naming, standard UI behavior).
@@ -107,4 +125,4 @@ Before merging a new backend/model addition:
 4. Token counts are correct or explicitly “unavailable”.
 5. Knob mapping is explicit (sent/deferred/ignored).
 6. Logs are accessible and secrets are redacted.
-
+7. Context trimming behavior is documented and system-message retention behavior is explicit.

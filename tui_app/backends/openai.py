@@ -24,7 +24,11 @@ def create_session(args: argparse.Namespace) -> OpenAIHTTPSession:
 
     api_key = _resolve_api_key(args)
 
-    logger = FileLogger.from_value(getattr(args, "openai_log_file", ""), "openai")
+    logger = FileLogger.from_value(
+        getattr(args, "openai_log_file", ""),
+        "backend",
+        config_path=getattr(args, "_config_path", None),
+    )
     resolved_model_id = (args.model_id or "").strip()
     if resolved_model_id.startswith("openai:"):
         resolved_model_id = resolved_model_id.split(":", 1)[1].strip()
@@ -36,8 +40,11 @@ def create_session(args: argparse.Namespace) -> OpenAIHTTPSession:
         )
     if logger is not None:
         logger.log(
-            f"session_init base_url={base_url} model={resolved_model_id} timeout_s={float(args.openai_timeout_s)}"
+            f"session_init base_url={base_url} model={resolved_model_id} timeout_s={float(args.openai_timeout_s)}",
+            source="app",
         )
+        logger.log("backend_ready openai session attached", source="backend")
+    requested_template = (args.chat_template or "").strip()
 
     return OpenAIHTTPSession(
         args=args,
@@ -46,5 +53,11 @@ def create_session(args: argparse.Namespace) -> OpenAIHTTPSession:
         api_key=api_key,
         timeout_s=float(args.openai_timeout_s),
         backend_name="openai",
+        template_info={
+            "template_control_level": "server_owned_template",
+            "chat_template_requested": requested_template,
+            "chat_template_applied": False,
+            "chat_template_reason": "ignored_server_owned" if requested_template else "empty_default",
+        },
         logger=logger,
     )

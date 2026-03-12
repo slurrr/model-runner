@@ -17,10 +17,21 @@ user_prefix = ""
 
 [ui]
 assume_think = false
+history_strip_think = false
 no_animate_thinking = false
 save_transcript = ""
 capture_last_request = false
 show_thinking = false
+
+[tools]
+enabled = false
+mode = "dry_run"
+schema_file = ""
+allow = []
+deny = []
+max_calls_per_turn = 3
+timeout_s = 10
+max_result_chars = 8000
 
 [backend.exl2]
 cache_type = "fp16"

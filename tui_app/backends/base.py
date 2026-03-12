@@ -15,5 +15,8 @@ class BackendSession(Protocol):
     def generate_turn(self, turn_id: int, messages: list[dict[str, object]], emit: EventEmitter) -> None:
         ...
 
-    def get_recent_logs(self, n: int = 80) -> list[str]:
+    def get_recent_logs(self, n: int = 80, sources: list[str] | None = None) -> list[str]:
+        ...
+
+    def list_log_sources(self) -> list[str]:
         ...
