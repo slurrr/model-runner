@@ -1,6 +1,7 @@
 {
   "model_id": "",
   "model_path": "",
+  "gguf_log_file": "",
   "stream": true,
   "max_new_tokens": 2048,
   "seed": null,
@@ -25,6 +26,7 @@
   "show_thinking": false,
   "no_animate_thinking": false,
   "save_transcript": "",
+  "capture_last_request": false,
   "assume_think": false,
   "n_ctx": 4096,
   "n_batch": null,

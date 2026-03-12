@@ -1,0 +1,10 @@
+[machine]
+# Local path containing model folders/files (not committed in machine.toml).
+model_root = "/home/poop/ml/models"
+
+# Optional per-machine endpoint defaults.
+ollama_host = "http://127.0.0.1:11434"
+
+# Optional placeholders for future backends.
+hf_cache_dir = ""
+openai_base_url = "http://127.0.0.1:8000/v1"

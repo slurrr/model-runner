@@ -1,5 +1,8 @@
 # <Model Name>
 
+Optional (recommended for HF models): save the upstream Hugging Face model card as:
+- `notes/model_card.md`
+
 ## Where
 - HF ID:
 - Local path:
@@ -81,4 +84,3 @@ python chat.py <name_or_path> ...
 - Proposed flag:
   - Why:
   - Expected impact:
-

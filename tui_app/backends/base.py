@@ -12,5 +12,11 @@ class BackendSession(Protocol):
     backend_name: str
     resolved_model_id: str
 
-    def generate_turn(self, turn_id: int, messages: list[dict[str, str]], emit: EventEmitter) -> None:
+    def generate_turn(self, turn_id: int, messages: list[dict[str, object]], emit: EventEmitter) -> None:
+        ...
+
+    def get_recent_logs(self, n: int = 80, sources: list[str] | None = None) -> list[str]:
+        ...
+
+    def list_log_sources(self) -> list[str]:
         ...

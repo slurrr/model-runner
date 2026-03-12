@@ -1,0 +1,71 @@
+[model]
+id = "Qwen3.5-9B"
+
+[gen]
+stream = true
+max_new_tokens = 8192
+temperature = 0.7
+top_p = 1.0
+top_k = -1
+min_p = 0.0
+repetition_penalty = 1.0
+presence_penalty = 0.0
+frequency_penalty = 0.0
+stop_strings = []
+stop_token_ids = []
+ignore_eos = false
+min_tokens = 0
+best_of = 1
+use_beam_search = false
+length_penalty = 1.0
+include_stop_str_in_output = false
+skip_special_tokens = true
+spaces_between_special_tokens = true
+truncate_prompt_tokens = 0
+allowed_token_ids = []
+prompt_logprobs = 0
+
+[prompt]
+chat_template = ""
+system = ""
+system_file = "models/Qwen3.5-9B/vllm/prompts/system.txt"
+user_prefix = ""
+
+[ui]
+show_thinking = false
+assume_think = true
+history_strip_think = true
+no_animate_thinking = false
+save_transcript = ""
+capture_last_request = true
+scroll_lines = 9
+ui_tick_ms = 33
+ui_max_events_per_tick = 120
+
+[tools]
+enabled = false
+mode = "dry_run"
+schema_file = ""
+allow = []
+deny = []
+max_calls_per_turn = 3
+timeout_s = 10
+max_result_chars = 8000
+
+[backend.vllm]
+mode = "managed"
+host = "127.0.0.1"
+port = 0
+cmd = "vllm"
+extra_args = ["--swap-space", "0", "--max-num-seqs", "1", "--enable-log-requests"]
+base_url = ""
+api_key = ""
+timeout_s = 900
+generation_config = "vllm"
+attention_backend = "FLASH_ATTN"
+dtype = "bfloat16"
+log_file = ""
+served_model_name = "Qwen3.5-9B"
+tensor_parallel_size = 1
+gpu_memory_utilization = 0.92
+max_model_len = 32768

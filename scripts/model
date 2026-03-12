@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = REPO_ROOT / "models"
 TEMPLATE_DIR = MODELS_DIR / "_TEMPLATE"
+HF_CACHE_DIR = Path(os.path.expanduser("~/.cache/huggingface/hub"))
 
 
 def _copy_tree(src: Path, dst: Path, *, overwrite: bool) -> list[Path]:
@@ -60,6 +62,111 @@ def _try_update_json(path: Path, updates: dict) -> bool:
     return changed
 
 
+def _try_update_toml_model_id(path: Path, model_id: str | None) -> bool:
+    if not model_id or not path.exists():
+        return False
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    in_model_section = False
+    changed = False
+    for idx, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            section = stripped.strip("[]").strip()
+            in_model_section = section == "model"
+            continue
+        if not in_model_section:
+            continue
+
+        # Replace the first `id = "..."` (or '...') within [model].
+        m = re.match(r'^(\s*)id(\s*)=(\s*)(["\'])(.*?)(\4)(\s*)$', line.rstrip("\n"))
+        if not m:
+            continue
+        prefix_ws, ws1, ws2, quote, _old, _q2, suffix_ws = m.groups()
+        new_line = f'{prefix_ws}id{ws1}={ws2}{quote}{model_id}{quote}{suffix_ws}\n'
+        lines[idx] = new_line
+        changed = True
+        break
+
+    if not changed:
+        return False
+    path.write_text("".join(lines), encoding="utf-8")
+    return True
+
+
+def _try_find_hf_model_card_from_id(model_id: str) -> Path | None:
+    """
+    Best-effort attempt to locate a model README.md for a HF id (org/name) in the local HF cache.
+    Returns the most recently modified README.md found under snapshots/.
+    """
+    if not model_id or "/" not in model_id:
+        return None
+    if not HF_CACHE_DIR.is_dir():
+        return None
+    org, name = model_id.split("/", 1)
+    repo_dir = HF_CACHE_DIR / f"models--{org}--{name}"
+    snapshots = repo_dir / "snapshots"
+    if not snapshots.is_dir():
+        return None
+    candidates: list[Path] = []
+    for snap in snapshots.iterdir():
+        if not snap.is_dir():
+            continue
+        readme = snap / "README.md"
+        if readme.is_file():
+            candidates.append(readme)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+    return candidates[0]
+
+
+def _resolve_model_card_source(backend: str, backend_id: str | None) -> Path | None:
+    """
+    Decide where to copy a model card from.
+    - If backend_id is a local directory and has README.md, use it.
+    - If backend_id looks like a HF id, try:
+        - ~/ml/models/<stem>/README.md
+        - ~/.cache/huggingface/hub/.../snapshots/*/README.md
+    """
+    if backend != "hf" or not backend_id:
+        return None
+
+    # Local directory explicit.
+    p = Path(os.path.expanduser(backend_id))
+    if p.is_dir():
+        readme = p / "README.md"
+        if readme.is_file():
+            return readme
+
+    # Common local convention: store under ~/ml/models/<name>.
+    stem = backend_id.split("/")[-1]
+    local_models = Path(os.path.expanduser("~/ml/models")) / stem
+    readme = local_models / "README.md"
+    if readme.is_file():
+        return readme
+
+    # HF cache lookup (offline-friendly).
+    return _try_find_hf_model_card_from_id(backend_id)
+
+
+def _resolve_model_card_source_without_id(model_name: str) -> Path | None:
+    """
+    Best-effort model card discovery when the user didn't pass --id.
+
+    Heuristics:
+    - If the user keeps local weights under ~/ml/models/<model_name>, use README.md from there.
+    - Otherwise, if model_name looks like a HF id (org/name), try the HF cache.
+    """
+    if not model_name:
+        return None
+    local_dir = Path(os.path.expanduser("~/ml/models")) / model_name
+    readme = local_dir / "README.md"
+    if readme.is_file():
+        return readme
+    return _try_find_hf_model_card_from_id(model_name)
+
+
 def cmd_add(args: argparse.Namespace) -> int:
     model_name = args.model_name.strip().rstrip("/").rstrip("\\")
     if not model_name:
@@ -81,6 +188,7 @@ def cmd_add(args: argparse.Namespace) -> int:
     # Ensure standard subfolders exist even if templates are empty.
     (backend_dir / "notes").mkdir(parents=True, exist_ok=True)
     (backend_dir / "config").mkdir(parents=True, exist_ok=True)
+    (backend_dir / "config" / "profiles").mkdir(parents=True, exist_ok=True)
     (backend_dir / "templates").mkdir(parents=True, exist_ok=True)
     (backend_dir / "prompts").mkdir(parents=True, exist_ok=True)
 
@@ -100,14 +208,60 @@ def cmd_add(args: argparse.Namespace) -> int:
         "This folder is for prompt/template overrides or experiments.\n",
         overwrite=False,
     )
+    _ensure_file(
+        backend_dir / "config" / "profiles" / "fast.toml",
+        "[gen]\nmax_new_tokens = 1024\n",
+        overwrite=False,
+    )
+    _ensure_file(
+        backend_dir / "config" / "profiles" / "longctx.toml",
+        "[gen]\nmax_new_tokens = 2048\n",
+        overwrite=False,
+    )
 
     # Light config population (optional; safe defaults).
     if backend == "ollama":
-        cfg = backend_dir / "config" / "config.json"
-        _try_update_json(cfg, {"model": args.backend_id})
-    elif backend in {"hf", "gguf", "exl2"}:
-        cfg = backend_dir / "config" / "config.json"
-        _try_update_json(cfg, {"model_id": args.backend_id})
+        cfg_toml = backend_dir / "config" / "default.toml"
+        _try_update_toml_model_id(cfg_toml, args.backend_id)
+    elif backend in {"hf", "gguf", "exl2", "openai", "vllm"}:
+        cfg_toml = backend_dir / "config" / "default.toml"
+        _try_update_toml_model_id(cfg_toml, args.backend_id)
+
+    # Optional: import upstream model card into notes/ as model_card.md (HF only).
+    # Auto-import if:
+    # - --id points to a local model directory, OR
+    # - ~/ml/models/<model_name>/README.md exists (common local workflow), OR
+    # - user explicitly requests it via --import-model-card (best-effort, may use HF cache).
+    if backend == "hf":
+        should_import = bool(args.import_model_card)
+        if not should_import and args.backend_id:
+            candidate = Path(os.path.expanduser(args.backend_id))
+            if candidate.is_dir():
+                should_import = True
+            else:
+                stem = args.backend_id.split("/")[-1]
+                local_readme = Path(os.path.expanduser("~/ml/models")) / stem / "README.md"
+                if local_readme.is_file():
+                    should_import = True
+        if not should_import:
+            local_readme = Path(os.path.expanduser("~/ml/models")) / model_name / "README.md"
+            if local_readme.is_file():
+                should_import = True
+
+        if should_import:
+            if args.backend_id:
+                src = _resolve_model_card_source(backend=backend, backend_id=args.backend_id)
+            else:
+                src = _resolve_model_card_source_without_id(model_name)
+        else:
+            src = None
+        if src is not None and src.is_file():
+            dst = backend_dir / "notes" / "model_card.md"
+            if dst.exists() and not args.force:
+                pass
+            else:
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dst)
 
     print(f"Model: {model_name}")
     print(f"Backend added: {backend}")
@@ -126,17 +280,22 @@ def build_parser() -> argparse.ArgumentParser:
 
     add = sub.add_parser("add", help="Add a backend scaffold for a model")
     add.add_argument("model_name", help="Folder name under models/ (e.g. ds32b-alex)")
-    add.add_argument("backend", choices=["hf", "gguf", "ollama", "exl2"], help="Backend to add")
+    add.add_argument("backend", choices=["hf", "gguf", "ollama", "exl2", "openai", "vllm"], help="Backend to add")
     add.add_argument(
         "--id",
         dest="backend_id",
         default=None,
-        help="Backend model identifier to prefill into config (HF/GGUF/EXL2: model_id, Ollama: model).",
+        help="Backend model identifier to prefill into config (HF/GGUF/EXL2/OpenAI: model_id, Ollama: model).",
     )
     add.add_argument(
         "--force",
         action="store_true",
         help="Overwrite existing template files when copying.",
+    )
+    add.add_argument(
+        "--import-model-card",
+        action="store_true",
+        help="(HF only) Try to copy the upstream model README.md into notes/model_card.md (best-effort, offline-friendly).",
     )
     add.set_defaults(func=cmd_add)
 
