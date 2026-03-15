@@ -30,6 +30,8 @@ def create_session(args: argparse.Namespace) -> OpenAIHTTPSession:
         config_path=getattr(args, "_config_path", None),
     )
     resolved_model_id = (args.model_id or "").strip()
+    if resolved_model_id and os.path.isabs(resolved_model_id):
+        resolved_model_id = ""
     if resolved_model_id.startswith("openai:"):
         resolved_model_id = resolved_model_id.split(":", 1)[1].strip()
     if not resolved_model_id:

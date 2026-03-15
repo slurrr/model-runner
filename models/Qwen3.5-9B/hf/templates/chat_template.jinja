@@ -117,12 +117,17 @@
                     {{- '\n<tool_call>\n<function=' + tool_call.name + '>\n' }}
                 {%- endif %}
                 {%- if tool_call.arguments is defined %}
-                    {%- for args_name, args_value in tool_call.arguments|items %}
-                        {{- '<parameter=' + args_name + '>\n' }}
-                        {%- set args_value = args_value | tojson | safe if args_value is mapping or (args_value is sequence and args_value is not string) else args_value | string %}
-                        {{- args_value }}
-                        {{- '\n</parameter>\n' }}
-                    {%- endfor %}
+                    {%- if tool_call.arguments is mapping %}
+                        {%- for args_name, args_value in tool_call.arguments|items %}
+                            {{- '<parameter=' + args_name + '>\n' }}
+                            {%- set args_value = args_value | tojson | safe if args_value is mapping or (args_value is sequence and args_value is not string) else args_value | string %}
+                            {{- args_value }}
+                            {{- '\n</parameter>\n' }}
+                        {%- endfor %}
+                    {%- else %}
+                        {%- set arguments_blob = tool_call.arguments | tojson | safe if tool_call.arguments is sequence and tool_call.arguments is not string else tool_call.arguments | string %}
+                        {{- arguments_blob }}
+                    {%- endif %}
                 {%- endif %}
                 {{- '</function>\n</tool_call>' }}
             {%- endfor %}

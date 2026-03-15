@@ -3,7 +3,10 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import signal
 import sys
+import threading
+import time
 
 from config_utils import apply_machine_model_root, load_config_layers, load_default_config_layers_for_model
 from tui_app.app import TuiRuntime, UnifiedTuiApp
@@ -12,7 +15,7 @@ from tui_app.backends.gguf import create_session as create_gguf_session
 from tui_app.backends.hf import create_session as create_hf_session
 from tui_app.backends.ollama import create_session as create_ollama_session
 from tui_app.backends.openai import create_session as create_openai_session
-from tui_app.backends.vllm import create_session as create_vllm_session
+from tui_app.backends.vllm import create_session as create_vllm_session, shutdown_managed_server
 
 
 def normalize_windows_path(raw: str) -> str:
@@ -154,6 +157,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--backend", choices=["hf", "gguf", "ollama", "exl2", "openai", "vllm"], default=None)
     parser.add_argument("--config", default="", help="Config path or name.")
     parser.add_argument("--profile", default="", help="Optional profile name (loads config/profiles/<name>.toml).")
+    parser.add_argument("--backend-only", action="store_true", help="Start backend only without the TUI (vLLM managed only).")
+    parser.add_argument(
+        "--detach-backend",
+        action="store_true",
+        help="Keep managed backend running after this process exits.",
+    )
+    parser.add_argument(
+        "--shutdown-backend",
+        action="store_true",
+        help="Stop the detached managed backend referenced by the current vLLM config.",
+    )
 
     parser.add_argument("--max-new-tokens", type=int, default=2048)
     parser.add_argument("--seed", type=int, default=None)
@@ -199,6 +213,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--user-prefix", default="")
 
     parser.add_argument("--show-thinking", action="store_true")
+    tool_blocks_group = parser.add_mutually_exclusive_group()
+    tool_blocks_group.add_argument("--show-tool-activity", dest="show_tool_activity", action="store_true")
+    tool_blocks_group.add_argument("--no-show-tool-activity", dest="show_tool_activity", action="store_false")
+    tool_args_group = parser.add_mutually_exclusive_group()
+    tool_args_group.add_argument("--show-tool-arguments", dest="show_tool_arguments", action="store_true")
+    tool_args_group.add_argument("--no-show-tool-arguments", dest="show_tool_arguments", action="store_false")
     parser.add_argument("--no-animate-thinking", action="store_true")
     parser.add_argument("--save-transcript", default="")
     tools_enabled_group = parser.add_mutually_exclusive_group()
@@ -223,12 +243,22 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dtype", choices=["auto", "float16", "bfloat16", "float32"], default="auto")
     parser.add_argument("--hf-attn", dest="hf_attn_implementation", choices=["eager", "sdpa", "flash_attention_2"], default=None)
     parser.add_argument("--hf-log-file", default="")
+    parser.add_argument("--hf-device-map", default="")
+    parser.add_argument("--hf-max-memory", default="")
+    hf_text_only_group = parser.add_mutually_exclusive_group()
+    hf_text_only_group.add_argument("--hf-text-only", dest="hf_text_only", action="store_true")
+    hf_text_only_group.add_argument("--no-hf-text-only", dest="hf_text_only", action="store_false")
+    hf_low_cpu_mem_group = parser.add_mutually_exclusive_group()
+    hf_low_cpu_mem_group.add_argument("--hf-low-cpu-mem-usage", dest="hf_low_cpu_mem_usage", action="store_true")
+    hf_low_cpu_mem_group.add_argument(
+        "--no-hf-low-cpu-mem-usage", dest="hf_low_cpu_mem_usage", action="store_false"
+    )
     parser.add_argument("--prompt-mode", choices=["chat", "plain"], default="chat")
     parser.add_argument("--chat-template", default="")
     history_strip_group = parser.add_mutually_exclusive_group()
     history_strip_group.add_argument("--history-strip-think", dest="history_strip_think", action="store_true")
     history_strip_group.add_argument("--no-history-strip-think", dest="history_strip_think", action="store_false")
-    parser.set_defaults(history_strip_think=False)
+    parser.set_defaults(history_strip_think=None)
     parser.add_argument("--max-context-tokens", type=int, default=None)
     parser.add_argument("--repetition-penalty", type=float, default=1.0)
     parser.add_argument("--presence-penalty", type=float, default=None)
@@ -299,9 +329,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vllm-generation-config", default="auto")
     parser.add_argument("--vllm-attention-backend", default="")
     parser.add_argument("--vllm-dtype", default="")
+    vllm_tool_choice_group = parser.add_mutually_exclusive_group()
+    vllm_tool_choice_group.add_argument(
+        "--vllm-enable-auto-tool-choice", dest="vllm_enable_auto_tool_choice", action="store_true"
+    )
+    vllm_tool_choice_group.add_argument(
+        "--no-vllm-enable-auto-tool-choice", dest="vllm_enable_auto_tool_choice", action="store_false"
+    )
+    parser.add_argument("--vllm-tool-call-parser", default="")
     parser.add_argument("--vllm-log-file", default="")
 
-    parser.set_defaults(stream=True, assume_think=None, tools_enabled=False)
+    parser.set_defaults(
+        stream=True,
+        assume_think=None,
+        tools_enabled=False,
+        show_tool_activity=False,
+        show_tool_arguments=False,
+    )
     parser.set_defaults(
         flash_attn=None,
         xformers=None,
@@ -312,6 +356,9 @@ def build_parser() -> argparse.ArgumentParser:
         include_stop_str_in_output=None,
         skip_special_tokens=None,
         spaces_between_special_tokens=None,
+        vllm_enable_auto_tool_choice=None,
+        hf_text_only=None,
+        hf_low_cpu_mem_usage=None,
     )
     return parser
 
@@ -348,8 +395,11 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "system_file",
         "user_prefix",
         "show_thinking",
+        "show_tool_activity",
+        "show_tool_arguments",
         "no_animate_thinking",
         "save_transcript",
+        "history_strip_think",
         "tools_enabled",
         "tools_mode",
         "tools_schema_file",
@@ -366,6 +416,10 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "dtype",
         "hf_attn_implementation",
         "hf_log_file",
+        "hf_device_map",
+        "hf_max_memory",
+        "hf_text_only",
+        "hf_low_cpu_mem_usage",
         "prompt_mode",
         "chat_template",
         "max_context_tokens",
@@ -422,6 +476,8 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "vllm_generation_config",
         "vllm_attention_backend",
         "vllm_dtype",
+        "vllm_enable_auto_tool_choice",
+        "vllm_tool_call_parser",
         "vllm_log_file",
     }
     return {k: v for k, v in normalized.items() if k in supported}
@@ -455,6 +511,10 @@ def _detect_cli_overrides(argv: list[str]) -> set[str]:
         "--system": "system",
         "--system-file": "system_file",
         "--user-prefix": "user_prefix",
+        "--show-tool-activity": "show_tool_activity",
+        "--no-show-tool-activity": "show_tool_activity",
+        "--show-tool-arguments": "show_tool_arguments",
+        "--no-show-tool-arguments": "show_tool_arguments",
         "--assume-think": "assume_think",
         "--no-assume-think": "assume_think",
         "--capture-last-request": "capture_last_request",
@@ -494,6 +554,9 @@ def _detect_cli_overrides(argv: list[str]) -> set[str]:
         "--vllm-generation-config": "vllm_generation_config",
         "--vllm-attention-backend": "vllm_attention_backend",
         "--vllm-dtype": "vllm_dtype",
+        "--vllm-enable-auto-tool-choice": "vllm_enable_auto_tool_choice",
+        "--no-vllm-enable-auto-tool-choice": "vllm_enable_auto_tool_choice",
+        "--vllm-tool-call-parser": "vllm_tool_call_parser",
         "--vllm-log-file": "vllm_log_file",
     }
     seen: set[str] = set()
@@ -515,6 +578,10 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
             "dtype",
             "hf_attn_implementation",
             "hf_log_file",
+            "hf_device_map",
+            "hf_max_memory",
+            "hf_text_only",
+            "hf_low_cpu_mem_usage",
             "prompt_mode",
             "chat_template",
             "max_context_tokens",
@@ -557,6 +624,8 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
             "vllm_generation_config",
             "vllm_attention_backend",
             "vllm_dtype",
+            "vllm_enable_auto_tool_choice",
+            "vllm_tool_call_parser",
             "vllm_log_file",
             "top_k",
             "min_p",
@@ -610,6 +679,9 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
         "backend",
         "config",
         "profile",
+        "backend_only",
+        "detach_backend",
+        "shutdown_backend",
         "max_new_tokens",
         "seed",
         "stream",
@@ -636,6 +708,7 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
         "no_animate_thinking",
         "save_transcript",
         "assume_think",
+        "history_strip_think",
         "scroll_lines",
         "ui_tick_ms",
         "ui_max_events_per_tick",
@@ -715,6 +788,11 @@ def parse_args() -> argparse.Namespace:
     args._config_layers = list(config_meta.get("loaded", []) or ([] if not config_path else [config_path]))
     args._config_origins = dict(config_meta.get("origins", {}) or {})
     early_backend = detect_backend(args.model_id, args.backend)
+    if early_backend == "openai" and not pre_args.model_id:
+        # Attach mode should not inherit a local model path from config defaults.
+        # Let the OpenAI-compatible session resolve /v1/models unless the user
+        # explicitly provided a model id.
+        args.model_id = ""
     if not args.model_id and early_backend == "gguf":
         args.model_id = defaults.get("model_path")
     if early_backend == "gguf":
@@ -739,6 +817,8 @@ def parse_args() -> argparse.Namespace:
     args._config_path = config_path
     if args.assume_think is None:
         args.assume_think = False
+    if args.history_strip_think is None:
+        args.history_strip_think = False
     if args.backend == "gguf":
         args.model_id = _resolve_gguf_model_id(
             args.model_id,
@@ -753,6 +833,8 @@ def parse_args() -> argparse.Namespace:
         args.model_id = args.model_id.split(":", 1)[1]
     if args.backend not in {"openai", "ollama"} and isinstance(args.model_id, str):
         args.model_id = apply_machine_model_root(args.model_id)
+    if args.backend == "openai" and not pre_args.model_id:
+        args.model_id = ""
     if pre_args.model_id:
         args._config_origins["model_id"] = "cli(positional)"
     for key in cli_overrides:
@@ -771,9 +853,63 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def _mirror_engine_logs_to_stdout(
+    stdout_path: str,
+    stderr_path: str,
+    *,
+    stdout_start: int = 0,
+    stderr_start: int = 0,
+) -> tuple[threading.Event, list[threading.Thread]]:
+    stop_event = threading.Event()
+    threads: list[threading.Thread] = []
+
+    def _tail(path: str, target, start_offset: int) -> None:
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                fh.seek(max(0, int(start_offset)))
+                while not stop_event.is_set():
+                    line = fh.readline()
+                    if line:
+                        print(line.rstrip("\n"), file=target, flush=True)
+                        continue
+                    time.sleep(0.15)
+        except Exception:
+            return
+
+    if stdout_path:
+        t = threading.Thread(target=_tail, args=(stdout_path, sys.stdout, stdout_start), daemon=True)
+        t.start()
+        threads.append(t)
+    if stderr_path:
+        t = threading.Thread(target=_tail, args=(stderr_path, sys.stderr, stderr_start), daemon=True)
+        t.start()
+        threads.append(t)
+    return stop_event, threads
+
+
 def main() -> None:
     args = parse_args()
     session = None
+
+    if args.shutdown_backend:
+        if args.backend != "vllm":
+            print("--shutdown-backend is only supported for the managed vLLM backend.")
+            sys.exit(1)
+        try:
+            result = shutdown_managed_server(args)
+        except Exception as exc:
+            print(f"Failed to shut down managed vLLM backend: {exc}")
+            sys.exit(1)
+        if result.get("stopped"):
+            print(
+                "Managed vLLM stopped: "
+                f"pid={result.get('pid')} base_url={result.get('base_url')} control_file={result.get('control_file')}"
+            )
+            return
+        print(f"No managed vLLM stopped ({result.get('reason')}): control_file={result.get('control_file')}")
+        return
 
     try:
         if args.backend == "hf":
@@ -795,11 +931,77 @@ def main() -> None:
         print("If tokenizer conversion fails, install: sentencepiece, tiktoken, protobuf")
         sys.exit(1)
 
-    print(f"TUI ready (backend={args.backend}). Commands: /exit, /quit, /clear")
+    if args.backend_only:
+        if args.backend != "vllm":
+            print("--backend-only is currently supported only for the managed vLLM backend.")
+            closer = getattr(session, "close", None)
+            if callable(closer):
+                closer()
+            sys.exit(1)
+        describe = getattr(session, "describe", None)
+        info = describe() if callable(describe) else {}
+        if not isinstance(info, dict):
+            info = {}
+        print(
+            "Backend ready "
+            f"(backend={args.backend}, base_url={info.get('base_url')}, pid={info.get('pid')}, "
+            f"control_file={info.get('control_file')})"
+        )
+        if args.detach_backend:
+            detacher = getattr(session, "detach", None)
+            if callable(detacher):
+                detacher()
+            closer = getattr(session, "close", None)
+            if callable(closer):
+                closer()
+            return
+        print("Serving in foreground. Press Ctrl+C to stop.")
+        mirror_stop = None
+        mirror_threads: list[threading.Thread] = []
+        stdout_path = str(info.get("engine_stdout_path") or "")
+        stderr_path = str(info.get("engine_stderr_path") or "")
+        if stdout_path or stderr_path:
+            mirror_stop, mirror_threads = _mirror_engine_logs_to_stdout(
+                stdout_path,
+                stderr_path,
+                stdout_start=int(info.get("engine_stdout_start") or 0),
+                stderr_start=int(info.get("engine_stderr_start") or 0),
+            )
+        try:
+            while True:
+                signal.pause()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            if mirror_stop is not None:
+                mirror_stop.set()
+            for thread in mirror_threads:
+                try:
+                    thread.join(timeout=0.5)
+                except Exception:
+                    pass
+            closer = getattr(session, "close", None)
+            if callable(closer):
+                try:
+                    closer()
+                except Exception as exc:
+                    print(f"Warning: backend shutdown failed: {exc}")
+        return
+
+    print(f"TUI ready (backend={args.backend}). Commands: /exit, /quit, /clear. Ctrl+Q exits TUI only.")
     app = UnifiedTuiApp(TuiRuntime(session=session, args=args))
+    if args.detach_backend:
+        app.shutdown_backend_on_exit = False
     try:
         app.run()
     finally:
+        if not getattr(app, "shutdown_backend_on_exit", True):
+            detacher = getattr(session, "detach", None)
+            if callable(detacher):
+                try:
+                    detacher()
+                except Exception:
+                    pass
         closer = getattr(session, "close", None)
         if callable(closer):
             try:

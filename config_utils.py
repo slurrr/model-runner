@@ -65,6 +65,14 @@ def _flatten_toml_config(data: dict, *, backend: str) -> dict:
                     mapped = "hf_attn_implementation"
                 elif backend == "hf" and key == "log_file":
                     mapped = "hf_log_file"
+                elif backend == "hf" and key == "device_map":
+                    mapped = "hf_device_map"
+                elif backend == "hf" and key == "max_memory":
+                    mapped = "hf_max_memory"
+                elif backend == "hf" and key == "text_only":
+                    mapped = "hf_text_only"
+                elif backend == "hf" and key == "low_cpu_mem_usage":
+                    mapped = "hf_low_cpu_mem_usage"
                 elif backend == "gguf" and key == "log_file":
                     mapped = "gguf_log_file"
                 elif backend == "exl2" and key == "log_file":
@@ -111,6 +119,10 @@ def _flatten_toml_config(data: dict, *, backend: str) -> dict:
                         mapped = "vllm_attention_backend"
                     elif key == "dtype":
                         mapped = "vllm_dtype"
+                    elif key == "enable_auto_tool_choice":
+                        mapped = "vllm_enable_auto_tool_choice"
+                    elif key == "tool_call_parser":
+                        mapped = "vllm_tool_call_parser"
                     elif key == "log_file":
                         mapped = "vllm_log_file"
                 out[mapped] = value
@@ -289,6 +301,27 @@ def resolve_config_path(config_arg: str, backend: str = "hf") -> str | None:
             inside_json = os.path.join(normalized, "config.json")
             if os.path.isfile(inside_json):
                 return inside_json
+
+    # Allow the OpenAI-compatible attach path to reuse an existing managed-vLLM
+    # model config when there is no dedicated openai config folder.
+    if backend == "openai":
+        vllm_backend = "vllm"
+        vllm_candidates = []
+        vllm_candidates.append(os.path.join(root, "models", stem, vllm_backend, "config", "default.toml"))
+        vllm_candidates.append(os.path.join(root, "models", stem, vllm_backend, "config", "config.json"))
+        vllm_candidates.append(os.path.join(root, "models", stem, vllm_backend, "config"))
+        vllm_candidates.append(os.path.join(root, "models", stem, vllm_backend))
+        for path in vllm_candidates:
+            normalized = os.path.abspath(path)
+            if os.path.isfile(normalized):
+                return normalized
+            if os.path.isdir(normalized):
+                inside_toml = os.path.join(normalized, "default.toml")
+                if os.path.isfile(inside_toml):
+                    return inside_toml
+                inside_json = os.path.join(normalized, "config.json")
+                if os.path.isfile(inside_json):
+                    return inside_json
 
     return None
 

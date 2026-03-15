@@ -39,6 +39,8 @@ no_animate_thinking = false
 save_transcript = ""
 capture_last_request = true
 scroll_lines = 9
+show_tool_activity = false
+show_tool_arguments = false
 ui_tick_ms = 33
 ui_max_events_per_tick = 120
 
@@ -64,6 +66,8 @@ timeout_s = 900
 generation_config = "vllm"
 attention_backend = ""
 dtype = ""
+enable_auto_tool_choice = false
+tool_call_parser = ""
 log_file = ""
 served_model_name = ""
 tensor_parallel_size = 1

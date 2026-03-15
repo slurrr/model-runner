@@ -86,6 +86,17 @@ class SlashRegistry:
         return [self._commands[name] for name in self.canonical_names()]
 
 
+def _format_name_grid(items: list[str], *, cols: int = 4, indent: str = "  ", min_width: int = 14) -> list[str]:
+    if not items:
+        return [f"{indent}(none)"]
+    width = max(min_width, max(len(item) for item in items) + 2)
+    rows: list[str] = []
+    for start in range(0, len(items), cols):
+        chunk = items[start : start + cols]
+        rows.append(indent + "".join(item.ljust(width) for item in chunk).rstrip())
+    return rows
+
+
 def resolve_path_maybe_relative(path: str, config_path: str | None = None) -> str:
     expanded = os.path.expanduser(path)
     if os.path.isabs(expanded):
@@ -105,7 +116,7 @@ class UserMessage(Static):
         self.images = images or []
 
     def on_mount(self):
-        body = Text(f"You: {self.text}", style="white")
+        body = Text(f"You: {self.text}", style=SOFT_TEXT)
         if self.images:
             names = ", ".join(os.path.basename(p) for p in self.images[:6])
             suffix = "" if len(self.images) <= 6 else f" (+{len(self.images) - 6} more)"
@@ -179,7 +190,7 @@ class ThinkingPanel(Container):
         if self.running and self.animate and not self.expanded:
             start = 2 + (self.phase % max(1, len(base)))
             end = min(start + 3, 2 + len(base))
-            text.stylize("white", start, end)
+            text.stylize(SOFT_TEXT, start, end)
 
         return text
 
@@ -244,10 +255,18 @@ class ThinkingPanel(Container):
 
 
 class AssistantMessage(Container):
-    def __init__(self, start_expanded: bool, animate_thinking: bool):
+    def __init__(
+        self,
+        start_expanded: bool,
+        animate_thinking: bool,
+        show_tool_activity: bool,
+        show_tool_arguments: bool,
+    ):
         super().__init__(classes="assistant-message")
         self.start_expanded = start_expanded
         self.animate_thinking = animate_thinking
+        self.show_tool_activity = show_tool_activity
+        self.show_tool_arguments = show_tool_arguments
         self.answer_text = ""
 
     def compose(self) -> ComposeResult:
@@ -274,7 +293,7 @@ class AssistantMessage(Container):
             return
         self.answer_text += text
         self.answer_widget.styles.height = "auto"
-        self.answer_widget.update(Text(self.answer_text, style="white"))
+        self.answer_widget.update(Text(self.answer_text, style=SOFT_TEXT))
         self.refresh(layout=True)
 
     def finish(self, record):
@@ -287,7 +306,13 @@ class AssistantMessage(Container):
             completion_tokens=completion_tokens if isinstance(completion_tokens, int) else None,
             tokens_per_s=float(tokens_per_s) if isinstance(tokens_per_s, (int, float)) else None,
         )
-        self.tools_widget.update(self._render_tool_activity(record.tool_activity or []))
+        self.tools_widget.update(
+            self._render_tool_activity(
+                record.tool_activity or [],
+                show_activity=self.show_tool_activity,
+                show_arguments=self.show_tool_arguments,
+            )
+        )
         if not self.answer_text.strip():
             msg = "(No final answer produced; generation ended during thinking. Increase max_new_tokens or adjust prompt.)"
             self.hint_widget.update(Text(msg, style="yellow"))
@@ -296,8 +321,13 @@ class AssistantMessage(Container):
         self.thinking_panel.toggle()
 
     @staticmethod
-    def _render_tool_activity(tool_activity: list[dict[str, object]]) -> Text:
-        if not tool_activity:
+    def _render_tool_activity(
+        tool_activity: list[dict[str, object]],
+        *,
+        show_activity: bool,
+        show_arguments: bool,
+    ) -> Text:
+        if not show_activity or not tool_activity:
             return Text("")
         body = Text()
         for index, item in enumerate(tool_activity, start=1):
@@ -311,20 +341,21 @@ class AssistantMessage(Container):
                 body.append(f" id={tool_call_id}", style="grey70")
             if status:
                 body.append(f" status={status}", style="yellow")
-            body.append("\nargs.raw:\n", style="grey70")
-            body.append(str(item.get("arguments_raw", "") or ""), style="white")
-            parsed = item.get("arguments_json")
-            if parsed is not None:
-                body.append("\nargs.json:\n", style="grey70")
-                body.append(json.dumps(parsed, indent=2, ensure_ascii=False, default=str), style="white")
+            if show_arguments:
+                body.append("\nargs.raw:\n", style="grey70")
+                body.append(str(item.get("arguments_raw", "") or ""), style=SOFT_TEXT)
+                parsed = item.get("arguments_json")
+                if parsed is not None:
+                    body.append("\nargs.json:\n", style="grey70")
+                    body.append(json.dumps(parsed, indent=2, ensure_ascii=False, default=str), style=SOFT_TEXT)
             result = item.get("result")
             error = item.get("error")
             if result not in (None, ""):
                 body.append("\nresult:\n", style="grey70")
-                body.append(str(result), style="white")
+                body.append(str(result), style=SOFT_TEXT)
             if error not in (None, "") and error != result:
                 body.append("\nerror:\n", style="grey70")
-                body.append(str(error), style="white")
+                body.append(str(error), style=SOFT_TEXT)
         return body
 
 
@@ -405,15 +436,16 @@ class UnifiedTuiApp(App):
     .thinking-panel { border: none; margin: 0 0 1 0; layout: vertical; height: auto; }
     #thinking-header { color: grey; text-style: bold; }
     #thinking-body { color: grey; margin: 0 0 0 2; height: auto; width: 100%; text-wrap: wrap; }
-    .assistant-answer { color: white; height: auto; width: 100%; text-wrap: wrap; }
+    .assistant-answer { color: #e6dfcf; height: auto; width: 100%; text-wrap: wrap; }
     .assistant-tools { color: cyan; margin: 1 0 0 2; height: auto; width: 100%; text-wrap: wrap; }
     .assistant-hint { margin: 1 0 0 0; }
     #input-band { dock: bottom; height: 6; background: #3a3a3a; padding: 0 1; }
-    #chat-input { width: 100%; height: 100%; background: #3a3a3a; color: white; border: none; }
+    #chat-input { width: 100%; height: 100%; background: #3a3a3a; color: #e6dfcf; border: none; }
     """
 
     BINDINGS = [
         Binding("t", "toggle_latest_thinking", "Toggle thinking"),
+        Binding("ctrl+q", "exit_tui_only", "Exit TUI", priority=True),
         Binding("ctrl+x", "interrupt_or_quit_hint", "Interrupt generation", priority=True),
         Binding("enter", "submit_prompt", "Send", priority=True),
         Binding("shift+enter", "insert_newline", "New line", priority=True),
@@ -431,6 +463,7 @@ class UnifiedTuiApp(App):
         if runtime.args.system:
             self.messages.append({"role": "system", "content": runtime.args.system})
         self.pending_images: list[str] = []
+        self.pending_text_files: list[str] = []
 
         self.event_queue: queue.Queue = queue.Queue()
         self.pending_assistant: AssistantMessage | None = None
@@ -445,6 +478,7 @@ class UnifiedTuiApp(App):
         self.show_topics: dict[str, ShowTopic] = {}
         self.show_aliases: dict[str, str] = {}
         self._active_show_opts: ShowOptions | None = None
+        self.shutdown_backend_on_exit = True
         self._register_show_topics()
         self._register_commands()
 
@@ -472,6 +506,10 @@ class UnifiedTuiApp(App):
     def action_toggle_latest_thinking(self):
         if self.pending_assistant is not None:
             self.pending_assistant.toggle_thinking()
+
+    def action_exit_tui_only(self):
+        self.shutdown_backend_on_exit = False
+        self.exit()
 
     def action_interrupt_or_quit_hint(self):
         if not self.is_generating:
@@ -551,6 +589,10 @@ class UnifiedTuiApp(App):
         input_box = self.query_one("#chat-input", TextArea)
         text = input_box.text.strip()
         if not text and not self.pending_images:
+            if not self.pending_text_files:
+                input_box.load_text("")
+                return
+        if not text and not self.pending_images and not self.pending_text_files:
             input_box.load_text("")
             return
         if text.startswith("//"):
@@ -566,6 +608,7 @@ class UnifiedTuiApp(App):
             self.notify("Previous generation is still shutting down. Please wait a moment.")
             return
         if text.lower() in {"exit", "quit"}:
+            self.shutdown_backend_on_exit = text.lower() == "quit"
             self.exit()
             return
         if text.lower() == "clear":
@@ -573,6 +616,7 @@ class UnifiedTuiApp(App):
             self.messages = []
             self.turn_records = []
             self.pending_images.clear()
+            self.pending_text_files.clear()
             self.pending_assistant = None
             if self.runtime.args.system:
                 self.messages.append({"role": "system", "content": self.runtime.args.system})
@@ -583,6 +627,21 @@ class UnifiedTuiApp(App):
             user_text = f"{self.runtime.args.user_prefix}{text}" if self.runtime.args.user_prefix else text
         else:
             user_text = ""
+
+        if self.pending_text_files:
+            attached_blocks = []
+            for path in self.pending_text_files:
+                try:
+                    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                        content = fh.read()
+                except Exception as exc:
+                    self.notify(f"Failed to read attached file: {path} ({exc})", severity="error")
+                    continue
+                attached_blocks.append(f"[Attached file: {os.path.basename(path)}]\n{content}")
+            self.pending_text_files.clear()
+            if attached_blocks:
+                file_text = "\n\n".join(attached_blocks)
+                user_text = f"{user_text}\n\n{file_text}".strip() if user_text else file_text
 
         message: dict[str, object] = {"role": "user", "content": user_text}
         images = None
@@ -596,6 +655,8 @@ class UnifiedTuiApp(App):
         assistant = AssistantMessage(
             start_expanded=self.runtime.args.show_thinking,
             animate_thinking=not self.runtime.args.no_animate_thinking,
+            show_tool_activity=bool(getattr(self.runtime.args, "show_tool_activity", False)),
+            show_tool_arguments=bool(getattr(self.runtime.args, "show_tool_arguments", False)),
         )
         await self.transcript.mount(assistant)
         self.pending_assistant = assistant
@@ -684,30 +745,36 @@ class UnifiedTuiApp(App):
 
     def _register_show_topics(self):
         topics = [
-            ShowTopic("status", "Concise runtime summary", "/show status", UnifiedTuiApp._show_status),
-            ShowTopic("session", "Session/backend state", "/show session", UnifiedTuiApp._show_session),
-            ShowTopic("prompt", "Prompt-related settings", "/show prompt", UnifiedTuiApp._show_prompt),
+            ShowTopic("status", "High-level current state", "/show status", UnifiedTuiApp._show_status),
+            ShowTopic("session", "Session overview", "/show session", UnifiedTuiApp._show_session),
+            ShowTopic("think", "Thinking and history-strip settings", "/show think", UnifiedTuiApp._show_think),
+            ShowTopic("prompt", "System/prefix/template settings", "/show prompt", UnifiedTuiApp._show_prompt),
             ShowTopic("gen", "Effective generation settings", "/show gen", UnifiedTuiApp._show_gen),
-            ShowTopic("ui", "UI behavior settings", "/show ui", UnifiedTuiApp._show_ui),
-            ShowTopic("args", "Parsed CLI args", "/show args", UnifiedTuiApp._show_args),
-            ShowTopic("history", "Conversation history summary", "/show history", UnifiedTuiApp._show_history),
-            ShowTopic("last", "Last turn record summary", "/show last", UnifiedTuiApp._show_last),
-            ShowTopic("env", "Environment summary", "/show env", UnifiedTuiApp._show_env),
-            ShowTopic("files", "Resolved file paths", "/show files", UnifiedTuiApp._show_files),
-            ShowTopic("model", "Model/backend identifiers", "/show model", UnifiedTuiApp._show_model),
-            ShowTopic("config", "Loaded config path", "/show config", UnifiedTuiApp._show_config),
+            ShowTopic("tools", "Tool harness and backend tool support", "/show tools", UnifiedTuiApp._show_tools),
+            ShowTopic("recording", "Request capture and transcript saving", "/show recording", UnifiedTuiApp._show_recording),
+            ShowTopic("connection", "Backend connection/attach state", "/show connection", UnifiedTuiApp._show_connection),
             ShowTopic("backend", "Backend details", "/show backend", UnifiedTuiApp._show_backend),
-            ShowTopic("tools", "Tool harness configuration", "/show tools", UnifiedTuiApp._show_tools),
-            ShowTopic("aliases", "Alias map for slash commands/topics", "/show aliases", UnifiedTuiApp._show_aliases),
-            ShowTopic("logs", "Recent backend logs", "/show logs [--n N] [--filter TEXT]", UnifiedTuiApp._show_logs),
+            ShowTopic("last", "Last turn record summary", "/show last", UnifiedTuiApp._show_last),
+            ShowTopic("history", "Conversation history summary", "/show history", UnifiedTuiApp._show_history),
             ShowTopic("request", "Last captured request payload (sanitized)", "/show request", UnifiedTuiApp._show_request),
+            ShowTopic("logs", "Recent backend logs", "/show logs [--n N] [--filter TEXT]", UnifiedTuiApp._show_logs),
+            ShowTopic("files", "Resolved file paths", "/show files", UnifiedTuiApp._show_files),
+            ShowTopic("config", "Loaded config layers and origins", "/show config", UnifiedTuiApp._show_config),
+            ShowTopic("model", "Model/backend identifiers", "/show model", UnifiedTuiApp._show_model),
+            ShowTopic("ui", "UI behavior settings", "/show ui", UnifiedTuiApp._show_ui),
+            ShowTopic("env", "Environment summary", "/show env", UnifiedTuiApp._show_env),
+            ShowTopic("args", "Parsed CLI args", "/show args", UnifiedTuiApp._show_args),
+            ShowTopic("aliases", "Alias map for slash commands/topics", "/show aliases", UnifiedTuiApp._show_aliases),
         ]
         self.show_topics = {topic.name: topic for topic in topics}
         self.show_aliases = {
             "session": "session",
             "status": "status",
+            "think": "think",
             "prompt": "prompt",
             "gen": "gen",
+            "recording": "recording",
+            "connection": "connection",
             "ui": "ui",
             "args": "args",
             "history": "history",
@@ -737,10 +804,10 @@ class UnifiedTuiApp(App):
         self.registry.register(
             SlashCommand(
                 name="show",
-                summary="Show current runtime/session details",
+                summary="Inspect runtime, prompt, backend, and turn state",
                 usage="/show <topic>",
                 handler=UnifiedTuiApp._cmd_show,
-                examples=("/show", "/show gen", "/show prompt"),
+                examples=("/show", "/show status", "/show think", "/show connection"),
             )
         )
         self.registry.register(
@@ -769,6 +836,26 @@ class UnifiedTuiApp(App):
         )
         self.registry.register(
             SlashCommand(
+                name="toolblocks",
+                aliases=("tool-blocks",),
+                summary="Toggle tool block visibility in the transcript",
+                usage="/toolblocks [on|off|toggle]",
+                handler=UnifiedTuiApp._cmd_toolblocks,
+                read_only=False,
+            )
+        )
+        self.registry.register(
+            SlashCommand(
+                name="toolargs",
+                aliases=("tool-args",),
+                summary="Toggle tool argument visibility in transcript tool blocks",
+                usage="/toolargs [on|off|toggle]",
+                handler=UnifiedTuiApp._cmd_toolargs,
+                read_only=False,
+            )
+        )
+        self.registry.register(
+            SlashCommand(
                 name="image",
                 aliases=("img",),
                 summary="Attach an image to the next prompt (HF vision models only)",
@@ -777,14 +864,27 @@ class UnifiedTuiApp(App):
                 examples=("/image ./pic.png", "/img list", "/image clear"),
             )
         )
+        self.registry.register(
+            SlashCommand(
+                name="file",
+                aliases=("attach", "textfile"),
+                summary="Attach a text file to the next prompt",
+                usage="/file <path> | /file list | /file clear",
+                handler=UnifiedTuiApp._cmd_file,
+                examples=("/file ./notes.txt", "/file list", "/file clear"),
+            )
+        )
         for alias_name in (
             "model",
             "config",
             "env",
             "files",
             "session",
+            "think",
             "prompt",
             "gen",
+            "recording",
+            "connection",
             "ui",
             "args",
             "history",
@@ -815,24 +915,62 @@ class UnifiedTuiApp(App):
         self.registry.register(
             SlashCommand(
                 name="exit",
-                aliases=("quit",),
-                summary="Exit TUI",
+                summary="Exit TUI and keep managed backend running",
                 usage="/exit",
                 handler=UnifiedTuiApp._cmd_exit,
+            )
+        )
+        self.registry.register(
+            SlashCommand(
+                name="quit",
+                summary="Exit TUI and shut down managed backend",
+                usage="/quit",
+                handler=UnifiedTuiApp._cmd_quit,
             )
         )
 
     def _cmd_help(self, argv: list[str]) -> str:
         if not argv:
-            lines = ["Available commands:"]
-            for cmd in self.registry.all_commands():
-                if cmd.hidden:
-                    continue
-                lines.append(f"/{cmd.name}: {cmd.summary}")
-            lines.append("")
-            lines.append("Use /help --all to include hidden aliases.")
-            lines.append("Try: /help <command>")
-            lines.append("Alias map: /show aliases")
+            lines = [
+                "TUI commands",
+                "",
+                "Inspect",
+            ]
+            lines.extend(_format_name_grid(["/show", "/status", "/help <command>"], cols=3, min_width=22))
+            lines.extend(
+                [
+                    "",
+                    "Prompt + Session",
+                ]
+            )
+            lines.extend(_format_name_grid(["/system", "/prefix", "/image", "/file"], cols=4, min_width=18))
+            lines.extend(
+                [
+                    "",
+                    "Transcript View",
+                ]
+            )
+            lines.extend(_format_name_grid(["/toolblocks", "/toolargs"], cols=3, min_width=18))
+            lines.extend(
+                [
+                    "",
+                    "Session Control",
+                ]
+            )
+            lines.extend(_format_name_grid(["/clear", "/exit", "/quit"], cols=3, min_width=18))
+            lines.extend(
+                [
+                    "",
+                    "Start Here",
+                ]
+            )
+            lines.extend(_format_name_grid(["/show", "/show status", "/show session", "/show think", "/show connection"], cols=3, min_width=22))
+            lines.extend(
+                [
+                    "",
+                    "Use /help --all to include hidden aliases.",
+                ]
+            )
             return "\n".join(lines)
         if argv[0] in {"--all", "aliases"}:
             lines = ["All commands (including hidden aliases):"]
@@ -867,16 +1005,41 @@ class UnifiedTuiApp(App):
         if not argv:
             lines = [
                 "Usage: /show <topic> [--verbose] [--json]",
-                "Use /status for a concise summary.",
-                "Topics:",
-                "  core: status, session, model, backend",
-                "  generation: gen, prompt, request, logs, tools",
-                "  runtime: ui, history, last, files, env, config, aliases, args",
-                "Examples:",
-                "  /show session",
-                "  /show gen",
-                "  /show prompt",
+                "",
+                "Overview",
             ]
+            lines.extend(_format_name_grid(["status", "session"], cols=4))
+            lines.extend(
+                [
+                    "",
+                    "Prompting",
+                ]
+            )
+            lines.extend(_format_name_grid(["think", "prompt", "gen", "tools"], cols=4))
+            lines.extend(
+                [
+                    "",
+                    "Backend + Debug",
+                ]
+            )
+            lines.extend(_format_name_grid(["connection", "backend", "last", "history", "request", "logs"], cols=4))
+            lines.extend(
+                [
+                    "",
+                    "Files + Config",
+                ]
+            )
+            lines.extend(_format_name_grid(["files", "config", "model", "ui", "env", "args", "aliases"], cols=4))
+            lines.extend(
+                [
+                    "",
+                    "Examples:",
+                    "  /show status",
+                    "  /show think",
+                    "  /show backend --verbose",
+                    "  /show last --verbose",
+                ]
+            )
             return "\n".join(lines)
         topic = argv[0].lower()
         parsed_argv, show_opts, parse_err = self._parse_show_flags(argv[1:])
@@ -984,21 +1147,100 @@ class UnifiedTuiApp(App):
         self.pending_images.append(path)
         return f"Attached: {path}\n(Will be sent with the next message.)"
 
+    def _cmd_file(self, argv: list[str]) -> str:
+        if not argv:
+            return "\n".join(
+                [
+                    "Usage:",
+                    "  /file <path>         Attach a text file to the next user message",
+                    "  /file list           Show pending text-file attachments",
+                    "  /file clear          Clear pending text-file attachments",
+                ]
+            )
+
+        sub = argv[0].strip().lower()
+        if sub in {"list", "ls"}:
+            if not self.pending_text_files:
+                return "(No pending text files.)"
+            lines = ["Pending text files:"]
+            for idx, path in enumerate(self.pending_text_files, start=1):
+                lines.append(f"{idx}. {path}")
+            return "\n".join(lines)
+
+        if sub in {"clear", "reset"}:
+            count = len(self.pending_text_files)
+            self.pending_text_files.clear()
+            return f"Cleared {count} pending text file(s)."
+
+        raw_path = " ".join(argv).strip()
+        path = resolve_path_maybe_relative(raw_path, config_path=self.runtime.args._config_path)
+        if not os.path.isfile(path):
+            return f"Not found: {path}"
+        try:
+            with open(path, "rb") as fh:
+                sample = fh.read(4096)
+        except Exception as exc:
+            return f"Failed to read: {path} ({exc})"
+        if b"\x00" in sample:
+            return f"Refusing to attach binary file: {path}"
+        self.pending_text_files.append(path)
+        return f"Attached text file: {path}\n(Will be sent with the next message.)"
+
+    def _cmd_toolargs(self, argv: list[str]) -> str:
+        current = bool(getattr(self.runtime.args, "show_tool_arguments", False))
+        if not argv:
+            return f"show_tool_arguments: {current}"
+        token = argv[0].strip().lower()
+        if token in {"on", "true", "1"}:
+            current = True
+        elif token in {"off", "false", "0"}:
+            current = False
+        elif token in {"toggle", "flip"}:
+            current = not current
+        else:
+            return "Usage: /toolargs [on|off|toggle]"
+        self.runtime.args.show_tool_arguments = current
+        return f"show_tool_arguments: {current}"
+
+    def _cmd_toolblocks(self, argv: list[str]) -> str:
+        current = bool(getattr(self.runtime.args, "show_tool_activity", False))
+        if not argv:
+            return f"show_tool_activity: {current}"
+        token = argv[0].strip().lower()
+        if token in {"on", "true", "1"}:
+            current = True
+        elif token in {"off", "false", "0"}:
+            current = False
+        elif token in {"toggle", "flip"}:
+            current = not current
+        else:
+            return "Usage: /toolblocks [on|off|toggle]"
+        self.runtime.args.show_tool_activity = current
+        return f"show_tool_activity: {current}"
+
     def _cmd_clear(self, argv: list[str]) -> str:
         del argv
         self.transcript.remove_children()
         self.messages = []
         self.turn_records = []
         self.pending_images.clear()
+        self.pending_text_files.clear()
         if self.runtime.args.system:
             self.messages.append({"role": "system", "content": self.runtime.args.system})
         self.pending_assistant = None
-        return "Transcript, conversation history, and turn records cleared."
+        return "Transcript, conversation history, turn records, and pending attachments cleared."
 
     def _cmd_exit(self, argv: list[str]) -> str:
         del argv
+        self.shutdown_backend_on_exit = False
         self.exit()
         return "Exiting."
+
+    def _cmd_quit(self, argv: list[str]) -> str:
+        del argv
+        self.shutdown_backend_on_exit = True
+        self.exit()
+        return "Exiting and shutting down backend."
 
     def _backend_summary_line(self) -> str:
         session = self.runtime.session
@@ -1052,6 +1294,7 @@ class UnifiedTuiApp(App):
         args = self.runtime.args
         session = self.runtime.session
         profile = getattr(args, "_config_profile", "") or ""
+        system_text = args.system or ""
         data = {
             "backend": session.backend_name,
             "model": session.resolved_model_id,
@@ -1060,11 +1303,15 @@ class UnifiedTuiApp(App):
             "generating": bool(self.is_generating),
             "follow_output": bool(self.follow_output),
             "pending_images": len(self.pending_images),
-            "gen": {
+            "prompt": {
+                "has_system": bool(system_text),
+                "history_strip_think": bool(getattr(args, "history_strip_think", False)),
+                "tools_enabled": bool(getattr(args, "tools_enabled", False)),
+            },
+            "generation": {
                 "max_new_tokens": args.max_new_tokens,
                 "temperature": args.temperature,
                 "top_p": args.top_p,
-                "top_k": args.top_k if args.top_k is not None else "deferred/default",
             },
             "backend_summary": self._backend_summary_line(),
         }
@@ -1097,81 +1344,434 @@ class UnifiedTuiApp(App):
             f"backend: {data['backend']}",
             f"model: {data['model']}",
             f"config: {data['config_path']} (profile={data['profile']})",
-            f"generating: {str(data['generating']).lower()}",
-            f"follow_output: {str(data['follow_output']).lower()}",
-            f"pending_images: {data['pending_images']}",
-            "gen:",
-            f"  max_new_tokens: {data['gen']['max_new_tokens']}",
-            f"  temperature: {data['gen']['temperature']}",
-            f"  top_p: {data['gen']['top_p']}",
-            f"  top_k: {data['gen']['top_k']}",
-            f"backend_summary: {data['backend_summary']}",
-            f"log_tail_available: {data.get('log_tail_available', False)}",
+            (
+                "state: "
+                f"generating={str(data['generating']).lower()} "
+                f"follow_output={str(data['follow_output']).lower()} "
+                f"pending_images={data['pending_images']}"
+            ),
+            (
+                "prompt: "
+                f"system={data['prompt']['has_system']} "
+                f"history_strip={data['prompt']['history_strip_think']} "
+                f"tools={data['prompt']['tools_enabled']}"
+            ),
+            (
+                "generation: "
+                f"max_new_tokens={data['generation']['max_new_tokens']} "
+                f"temperature={data['generation']['temperature']} "
+                f"top_p={data['generation']['top_p']}"
+            ),
+            f"connection: {data['backend_summary']}",
         ]
         if isinstance(data["last_turn"], dict):
             lt = data["last_turn"]
             lines.extend(
                 [
                     "last_turn:",
-                    f"  elapsed_s: {lt['elapsed_s']}",
-                    f"  ended_in_think: {lt['ended_in_think']}",
-                    f"  chars_raw: {lt['chars_raw']}",
-                    f"  chars_think: {lt['chars_think']}",
-                    f"  chars_answer: {lt['chars_answer']}",
-                    f"  tool_activity_count: {lt['tool_activity_count']}",
-                    f"  prompt_tokens: {lt['prompt_tokens']}",
-                    f"  completion_tokens: {lt['completion_tokens']}",
-                    f"  total_tokens: {lt['total_tokens']}",
-                    f"  tokens_per_s: {lt['tokens_per_s']}",
-                    f"  context_strategy: {lt['context']['strategy']}",
-                    f"  dropped_history_messages: {lt['context']['dropped_messages']}",
-                    f"  system_message_preserved: {lt['context']['system_message_preserved']}",
+                    f"  elapsed_s={lt['elapsed_s']} ended_in_think={lt['ended_in_think']} tools={lt['tool_activity_count']}",
+                    (
+                        "  tokens: "
+                        f"prompt={lt['prompt_tokens']} completion={lt['completion_tokens']} "
+                        f"total={lt['total_tokens']} tok/s={lt['tokens_per_s']}"
+                    ),
+                    (
+                        "  context: "
+                        f"strategy={lt['context']['strategy']} "
+                        f"dropped={lt['context']['dropped_messages']} "
+                        f"system_preserved={lt['context']['system_message_preserved']}"
+                    ),
                 ]
             )
+            if self._show_opts().verbose:
+                lines.extend(
+                    [
+                        (
+                            "  chars: "
+                            f"raw={lt['chars_raw']} think={lt['chars_think']} answer={lt['chars_answer']}"
+                        ),
+                        f"  log_tail_available: {data.get('log_tail_available', False)}",
+                    ]
+                )
         else:
             lines.append("last_turn: (none)")
         return self._to_json_or_lines(data, lines)
 
+    def _show_think(self, argv: list[str]) -> str:
+        del argv
+        args = self.runtime.args
+        data = {
+            "assume_think": bool(getattr(args, "assume_think", False)),
+            "show_thinking": bool(getattr(args, "show_thinking", False)),
+            "history_strip_think": bool(getattr(args, "history_strip_think", False)),
+            "no_animate_thinking": bool(getattr(args, "no_animate_thinking", False)),
+        }
+        lines = [
+            f"assume_think: {data['assume_think']}",
+            f"show_thinking: {data['show_thinking']}",
+            f"history_strip_think: {data['history_strip_think']}",
+        ]
+        if self._show_opts().verbose:
+            lines.append(f"no_animate_thinking: {data['no_animate_thinking']}")
+        return self._to_json_or_lines(data, lines)
+
     def _show_session(self, argv: list[str]) -> str:
         del argv
-        status_data = {}
-        if self._show_opts().as_json:
-            try:
-                status_data = json.loads(self._show_status([]))
-            except Exception:
-                status_data = {}
+        args = self.runtime.args
+        session = self.runtime.session
+        profile = getattr(args, "_config_profile", "") or ""
+        system_text = args.system or ""
+        system_source = "none"
+        cli_overrides = set(getattr(args, "_cli_overrides", set()) or set())
+        if "system" in cli_overrides:
+            system_source = "--system"
+        elif args.system_file:
+            system_source = "--system-file"
+        elif system_text:
+            system_source = "config/default"
+        describe = getattr(session, "describe", None)
+        backend_info = describe() if callable(describe) else {}
+        if not isinstance(backend_info, dict):
+            backend_info = {"summary": str(backend_info)}
         data = {
-            "backend": self.runtime.session.backend_name,
-            "model_id": self.runtime.session.resolved_model_id,
-            "config_path": self.runtime.args._config_path or "(none)",
-            "is_generating": bool(self.is_generating),
-            "follow_output": bool(self.follow_output),
-            "transcript_widgets": len(self.transcript.children),
-            "scroll_y": float(self.transcript.scroll_y),
-            "max_scroll_y": float(self.transcript.max_scroll_y),
-            "status": status_data if status_data else None,
+            "backend": session.backend_name,
+            "model_id": session.resolved_model_id,
+            "config_path": args._config_path or "(none)",
+            "profile": profile or "(none)",
+            "state": {
+                "is_generating": bool(self.is_generating),
+                "follow_output": bool(self.follow_output),
+            },
+            "prompt": {
+                "has_system": bool(system_text),
+                "system_source": system_source,
+                "system_file": resolve_path_maybe_relative(args.system_file, config_path=args._config_path)
+                if args.system_file
+                else "(none)",
+                "user_prefix": args.user_prefix or "",
+                "chat_template": args.chat_template or "(none)",
+            },
+            "thinking": {
+                "assume_think": bool(getattr(args, "assume_think", False)),
+                "show_thinking": bool(getattr(args, "show_thinking", False)),
+                "history_strip_think": bool(getattr(args, "history_strip_think", False)),
+            },
+            "tools": {
+                "enabled": bool(getattr(args, "tools_enabled", False)),
+                "mode": getattr(args, "tools_mode", "off"),
+                "show_tool_activity": bool(getattr(args, "show_tool_activity", False)),
+                "show_tool_arguments": bool(getattr(args, "show_tool_arguments", False)),
+                "max_calls_per_turn": getattr(args, "tools_max_calls_per_turn", "unavailable"),
+            },
+            "recording": {
+                "capture_last_request": bool(getattr(args, "capture_last_request", False)),
+                "save_transcript": (
+                    resolve_path_maybe_relative(args.save_transcript, config_path=args._config_path)
+                    if getattr(args, "save_transcript", "")
+                    else "(none)"
+                ),
+            },
+            "backend_connection": backend_info,
         }
         lines = [
             f"backend: {data['backend']}",
             f"model_id: {data['model_id']}",
-            f"config_path: {data['config_path']}",
-            f"is_generating: {data['is_generating']}",
-            f"follow_output: {data['follow_output']}",
-            f"transcript_widgets: {data['transcript_widgets']}",
-            f"scroll_y: {data['scroll_y']:.1f}/{data['max_scroll_y']:.1f}",
+            f"config: {data['config_path']} (profile={data['profile']})",
+            f"state: generating={data['state']['is_generating']} follow_output={data['state']['follow_output']}",
+            (
+                "prompt: "
+                f"system={data['prompt']['has_system']} "
+                f"source={data['prompt']['system_source']} "
+                f"user_prefix={data['prompt']['user_prefix']!r}"
+            ),
+            (
+                "thinking: "
+                f"assume={data['thinking']['assume_think']} "
+                f"show={data['thinking']['show_thinking']} "
+                f"history_strip={data['thinking']['history_strip_think']}"
+            ),
+            (
+                "tools: "
+                f"enabled={data['tools']['enabled']} "
+                f"mode={data['tools']['mode']} "
+                f"show_blocks={data['tools']['show_tool_activity']} "
+                f"show_args={data['tools']['show_tool_arguments']}"
+            ),
+            (
+                "recording: "
+                f"capture_last_request={data['recording']['capture_last_request']} "
+                f"save_transcript={data['recording']['save_transcript']}"
+            ),
         ]
+        backend_summary = self._backend_summary_line()
+        if backend_summary and backend_summary != "(unavailable)":
+            lines.append(f"connection: {backend_summary}")
         if self._show_opts().verbose:
-            lines.append(f"pending_images: {len(self.pending_images)}")
-            lines.append(f"backend_summary: {self._backend_summary_line()}")
+            lines.extend(
+                [
+                    f"prompt.chat_template: {data['prompt']['chat_template']}",
+                    f"prompt.system_file: {data['prompt']['system_file']}",
+                    f"tools.max_calls_per_turn: {data['tools']['max_calls_per_turn']}",
+                    f"pending_images: {len(self.pending_images)}",
+                    f"transcript_widgets: {len(self.transcript.children)}",
+                    f"scroll_y: {float(self.transcript.scroll_y):.1f}/{float(self.transcript.max_scroll_y):.1f}",
+                ]
+            )
+            for key in sorted(backend_info.keys()):
+                lines.append(f"backend.{key}: {backend_info[key]}")
         return self._to_json_or_lines(data, lines)
+
+    def _extract_vllm_runtime_flags(self) -> dict[str, object]:
+        raw = list(getattr(self.runtime.args, "vllm_extra_args", []) or [])
+        out: dict[str, object] = {
+            "kv_cache_dtype": "none",
+            "calculate_kv_scales": False,
+            "stream_interval": "default",
+            "swap_space": "default",
+            "max_num_seqs": "default",
+        }
+        idx = 0
+        while idx < len(raw):
+            token = raw[idx]
+            nxt = raw[idx + 1] if idx + 1 < len(raw) else None
+            if token == "--kv-cache-dtype" and nxt is not None:
+                out["kv_cache_dtype"] = nxt
+                idx += 2
+                continue
+            if token == "--calculate-kv-scales":
+                out["calculate_kv_scales"] = True
+                idx += 1
+                continue
+            if token == "--stream-interval" and nxt is not None:
+                out["stream_interval"] = nxt
+                idx += 2
+                continue
+            if token == "--swap-space" and nxt is not None:
+                out["swap_space"] = nxt
+                idx += 2
+                continue
+            if token == "--max-num-seqs" and nxt is not None:
+                out["max_num_seqs"] = nxt
+                idx += 2
+                continue
+            idx += 1
+        return out
+
+    def _backend_runtime_summary(self) -> dict[str, object]:
+        args = self.runtime.args
+        backend = self.runtime.session.backend_name
+        summary: dict[str, object] = {"backend": backend}
+        if backend == "hf":
+            weights_quant = "8bit" if getattr(args, "use_8bit", False) else "4bit" if getattr(args, "use_4bit", False) else "none"
+            summary.update(
+                {
+                    "weights_quantization": weights_quant,
+                    "kv_cache_quantization": "none",
+                    "attention_backend": args.hf_attn_implementation or "default",
+                    "device_map": getattr(args, "hf_device_map", "") or "auto",
+                    "max_memory": getattr(args, "hf_max_memory", "") or "(unset)",
+                    "low_cpu_mem_usage": getattr(args, "hf_low_cpu_mem_usage", None),
+                    "text_only_mode": bool(getattr(args, "hf_text_only", False)),
+                    "supports_images": bool(getattr(self.runtime.session, "supports_images", False)),
+                    "context_window_target": args.max_context_tokens if args.max_context_tokens is not None else "model_default",
+                    "context_allocation": "grows_with_sequence",
+                }
+            )
+            return summary
+        if backend == "vllm":
+            flags = self._extract_vllm_runtime_flags()
+            summary.update(
+                {
+                    "weights_quantization": "none",
+                    "kv_cache_quantization": flags["kv_cache_dtype"],
+                    "calculate_kv_scales": bool(flags["calculate_kv_scales"]),
+                    "attention_backend": args.vllm_attention_backend or "auto",
+                    "context_window_target": int(args.vllm_max_model_len or 0) or "server_default",
+                    "context_allocation": "preallocated_kv_cache",
+                    "stream_interval": flags["stream_interval"],
+                    "max_num_seqs": flags["max_num_seqs"],
+                    "swap_space": flags["swap_space"],
+                }
+            )
+            return summary
+        if backend == "gguf":
+            summary.update(
+                {
+                    "weights_quantization": "gguf",
+                    "kv_cache_quantization": "none",
+                    "context_window_target": args.n_ctx,
+                    "context_allocation": "reserved_context_window",
+                }
+            )
+            return summary
+        if backend == "exl2":
+            summary.update(
+                {
+                    "weights_quantization": "exl2",
+                    "kv_cache_quantization": getattr(args, "cache_type", "fp16"),
+                    "context_window_target": getattr(args, "max_seq_len", None) or "model_default",
+                    "context_allocation": "reserved_context_window",
+                }
+            )
+            return summary
+        if backend in {"openai", "ollama"}:
+            summary.update(
+                {
+                    "weights_quantization": "server_managed",
+                    "kv_cache_quantization": "server_managed",
+                    "context_window_target": "server_managed",
+                    "context_allocation": "server_managed",
+                }
+            )
+            return summary
+        return summary
+
+    def _backend_runtime_views(self) -> tuple[dict[str, object], dict[str, object]]:
+        args = self.runtime.args
+        session = self.runtime.session
+        backend = session.backend_name
+        requested: dict[str, object] = {}
+        effective: dict[str, object] = {}
+        describe = getattr(session, "describe", None)
+        info = describe() if callable(describe) else {}
+        if not isinstance(info, dict):
+            info = {}
+
+        if backend == "hf":
+            weights_quant = "8bit" if bool(getattr(args, "use_8bit", False)) else "4bit" if bool(getattr(args, "use_4bit", False)) else "none"
+            requested = {
+                "weights_quantization": weights_quant,
+                "kv_cache_quantization": "none",
+                "attention_backend": getattr(args, "hf_attn_implementation", None) or "default",
+                "device_map": getattr(args, "hf_device_map", "") or "auto",
+                "max_memory": getattr(args, "hf_max_memory", "") or "(unset)",
+                "low_cpu_mem_usage": getattr(args, "hf_low_cpu_mem_usage", None),
+                "context_window_target": args.max_context_tokens if args.max_context_tokens is not None else "model_default",
+                "text_only_mode": bool(getattr(args, "hf_text_only", False)),
+            }
+            effective = {
+                "weights_quantization": info.get("weights_quantization", weights_quant),
+                "kv_cache_quantization": info.get("kv_cache_quantization", "none"),
+                "attention_backend": info.get("attention_backend_effective", "unknown"),
+                "device_map": info.get("hf_device_map", requested["device_map"]),
+                "max_memory": info.get("hf_max_memory", requested["max_memory"]),
+                "max_memory_effective": info.get("hf_max_memory_effective", "unknown"),
+                "low_cpu_mem_usage": info.get("hf_low_cpu_mem_usage", requested["low_cpu_mem_usage"]),
+                "torch_dtype": info.get("torch_dtype_effective", info.get("torch_dtype", getattr(args, "dtype", "auto"))),
+                "runtime_device": info.get("runtime_device", "unknown"),
+                "fully_on_single_gpu": info.get("fully_on_single_gpu", "unknown"),
+                "modules_on_cpu": info.get("modules_on_cpu", "unknown"),
+                "modules_on_disk": info.get("modules_on_disk", "unknown"),
+                "memory_footprint": info.get("memory_footprint", "unavailable"),
+                "cuda_memory_allocated": info.get("cuda_memory_allocated", "unavailable"),
+                "cuda_memory_reserved": info.get("cuda_memory_reserved", "unavailable"),
+                "cuda_max_memory_allocated": info.get("cuda_max_memory_allocated", "unavailable"),
+                "cuda_max_memory_reserved": info.get("cuda_max_memory_reserved", "unavailable"),
+                "qwen_fast_path_available": info.get("qwen_fast_path_available", "unknown"),
+                "context_window_target": requested["context_window_target"],
+                "context_allocation": info.get("context_allocation", "grows_with_sequence"),
+                "text_only_mode": info.get("text_only_mode", requested["text_only_mode"]),
+                "supports_images": info.get("supports_images", False),
+            }
+            return requested, effective
+
+        if backend == "vllm":
+            flags = self._extract_vllm_runtime_flags()
+            requested = {
+                "weights_quantization": "none",
+                "kv_cache_quantization": flags["kv_cache_dtype"],
+                "calculate_kv_scales": bool(flags["calculate_kv_scales"]),
+                "attention_backend": getattr(args, "vllm_attention_backend", "") or "auto",
+                "context_window_target": int(args.vllm_max_model_len or 0) or "server_default",
+                "stream_interval": flags["stream_interval"],
+                "max_num_seqs": flags["max_num_seqs"],
+                "swap_space": flags["swap_space"],
+            }
+            effective = {
+                "weights_quantization": "none",
+                "kv_cache_quantization": requested["kv_cache_quantization"],
+                "calculate_kv_scales": requested["calculate_kv_scales"],
+                "attention_backend": info.get("attention_backend_effective", requested["attention_backend"]),
+                "context_window_target": requested["context_window_target"],
+                "context_allocation": "preallocated_kv_cache",
+                "stream_interval": requested["stream_interval"],
+                "max_num_seqs": requested["max_num_seqs"],
+                "swap_space": requested["swap_space"],
+            }
+            return requested, effective
+
+        if backend == "gguf":
+            requested = {
+                "weights_quantization": "gguf",
+                "kv_cache_quantization": "none",
+                "context_window_target": args.n_ctx,
+            }
+            effective = {
+                **requested,
+                "context_allocation": "reserved_context_window",
+            }
+            return requested, effective
+
+        if backend == "exl2":
+            requested = {
+                "weights_quantization": "exl2",
+                "kv_cache_quantization": getattr(args, "cache_type", "fp16"),
+                "context_window_target": getattr(args, "max_seq_len", None) or "model_default",
+            }
+            effective = {
+                **requested,
+                "context_allocation": "reserved_context_window",
+            }
+            return requested, effective
+
+        if backend in {"openai", "ollama"}:
+            requested = {
+                "weights_quantization": "server_managed",
+                "kv_cache_quantization": "server_managed",
+                "context_window_target": "server_managed",
+            }
+            effective = {
+                **requested,
+                "context_allocation": "server_managed",
+            }
+            return requested, effective
+
+        return requested, effective
 
     def _show_prompt(self, argv: list[str]) -> str:
         del argv
+        args = self.runtime.args
+        system = args.system or ""
+        cli_overrides = set(getattr(args, "_cli_overrides", set()) or set())
+        source = "none"
+        if "system" in cli_overrides:
+            source = "--system"
+        elif args.system_file:
+            source = "--system-file"
+        elif system:
+            source = "config/default"
         data = {
-            "system": self._cmd_system([]),
-            "prefix": self._cmd_prefix([]),
+            "has_system": bool(system),
+            "system_source": source,
+            "system_file": resolve_path_maybe_relative(args.system_file, config_path=args._config_path)
+            if args.system_file
+            else "(none)",
+            "user_prefix": args.user_prefix or "",
+            "prompt_mode": getattr(args, "prompt_mode", None) if self.runtime.session.backend_name == "hf" else "N/A",
+            "chat_template": args.chat_template or "(none)",
         }
-        return self._to_json_or_lines(data, [data["system"], data["prefix"]])
+        lines = [
+            f"has_system: {data['has_system']}",
+            f"system_source: {data['system_source']}",
+            f"user_prefix: {data['user_prefix']!r}",
+            f"chat_template: {data['chat_template']}",
+        ]
+        if self._show_opts().verbose:
+            lines.append(f"system_file: {data['system_file']}")
+            lines.append(f"prompt_mode: {data['prompt_mode']}")
+            lines.append("system_prompt:")
+            lines.append(system if system else "(empty)")
+        return self._to_json_or_lines(data, lines)
 
     def _show_gen(self, argv: list[str]) -> str:
         del argv
@@ -1226,6 +1826,8 @@ class UnifiedTuiApp(App):
         args = self.runtime.args
         data = {
             "show_thinking": args.show_thinking,
+            "show_tool_activity": bool(getattr(args, "show_tool_activity", False)),
+            "show_tool_arguments": bool(getattr(args, "show_tool_arguments", False)),
             "no_animate_thinking": args.no_animate_thinking,
             "scroll_lines": args.scroll_lines,
             "ui_tick_ms": args.ui_tick_ms,
@@ -1234,6 +1836,23 @@ class UnifiedTuiApp(App):
             "capture_last_request": bool(getattr(args, "capture_last_request", False)),
         }
         lines = [f"{k}: {v}" for k, v in data.items()]
+        return self._to_json_or_lines(data, lines)
+
+    def _show_recording(self, argv: list[str]) -> str:
+        del argv
+        args = self.runtime.args
+        data = {
+            "capture_last_request": bool(getattr(args, "capture_last_request", False)),
+            "save_transcript": (
+                resolve_path_maybe_relative(args.save_transcript, config_path=args._config_path)
+                if getattr(args, "save_transcript", "")
+                else "(none)"
+            ),
+        }
+        lines = [
+            f"capture_last_request: {data['capture_last_request']}",
+            f"save_transcript: {data['save_transcript']}",
+        ]
         return self._to_json_or_lines(data, lines)
 
     def _show_args(self, argv: list[str]) -> str:
@@ -1295,7 +1914,25 @@ class UnifiedTuiApp(App):
             data["raw"] = last.raw
             data["think"] = last.think
             data["answer"] = last.answer
+            data["tool_activity"] = list(last.tool_activity or [])
             lines.extend(["", "raw:", last.raw, "", "think:", last.think, "", "answer:", last.answer])
+            lines.extend(["", "tool_activity:"])
+            if last.tool_activity:
+                for index, item in enumerate(last.tool_activity, start=1):
+                    lines.append(f"  [{index}] name={item.get('name', '')} id={item.get('tool_call_id', '')}")
+                    lines.append(f"    status: {item.get('status', '')}")
+                    lines.append(f"    arguments_raw: {item.get('arguments_raw', '')}")
+                    parsed = item.get("arguments_json")
+                    if parsed is not None:
+                        lines.append("    arguments_json:")
+                        for row in json.dumps(parsed, indent=2, ensure_ascii=False, default=str).splitlines():
+                            lines.append(f"      {row}")
+                    if item.get("result") not in (None, ""):
+                        lines.append(f"    result: {item.get('result')}")
+                    if item.get("error") not in (None, ""):
+                        lines.append(f"    error: {item.get('error')}")
+            else:
+                lines.append("  (none)")
         return self._to_json_or_lines(data, lines)
 
     def _show_env(self, argv: list[str]) -> str:
@@ -1365,11 +2002,45 @@ class UnifiedTuiApp(App):
     def _show_backend(self, argv: list[str]) -> str:
         del argv
         session = self.runtime.session
+        requested_runtime, effective_runtime = self._backend_runtime_views()
         data = {
             "backend": session.backend_name,
             "resolved_model_id": session.resolved_model_id,
+            "effective": effective_runtime,
         }
-        lines = [f"backend: {data['backend']}", f"resolved_model_id: {data['resolved_model_id']}"]
+        lines = [
+            f"backend: {data['backend']}",
+            f"resolved_model_id: {data['resolved_model_id']}",
+        ]
+        preferred = [
+            "weights_quantization",
+            "kv_cache_quantization",
+            "calculate_kv_scales",
+            "torch_dtype",
+            "attention_backend",
+            "runtime_device",
+            "device_map",
+            "fully_on_single_gpu",
+            "modules_on_cpu",
+            "modules_on_disk",
+            "memory_footprint",
+            "cuda_memory_allocated",
+            "cuda_memory_reserved",
+            "max_memory_effective",
+            "qwen_fast_path_available",
+            "max_memory",
+            "low_cpu_mem_usage",
+            "text_only_mode",
+            "supports_images",
+            "context_window_target",
+            "context_allocation",
+            "stream_interval",
+            "max_num_seqs",
+            "swap_space",
+        ]
+        for key in preferred:
+            if key in effective_runtime:
+                lines.append(f"{key}: {effective_runtime[key]}")
         describe = getattr(session, "describe", None)
         info = getattr(session, "get_info", None)
         extra = None
@@ -1379,14 +2050,59 @@ class UnifiedTuiApp(App):
             extra = info()
         if isinstance(extra, dict):
             data["describe"] = extra
-            for key in sorted(extra.keys()):
-                lines.append(f"{key}: {extra[key]}")
+            if self._show_opts().verbose:
+                data["requested"] = requested_runtime
+                lines.append("requested:")
+                if requested_runtime:
+                    for key in sorted(requested_runtime.keys()):
+                        lines.append(f"  {key}: {requested_runtime[key]}")
+                else:
+                    lines.append("  (none)")
+                lines.append("effective:")
+                if effective_runtime:
+                    for key in sorted(effective_runtime.keys()):
+                        lines.append(f"  {key}: {effective_runtime[key]}")
+                else:
+                    lines.append("  (none)")
+                lines.append("raw:")
+                for key in sorted(extra.keys()):
+                    lines.append(f"  {key}: {extra[key]}")
+        return self._to_json_or_lines(data, lines)
+
+    def _show_connection(self, argv: list[str]) -> str:
+        del argv
+        session = self.runtime.session
+        describe = getattr(session, "describe", None)
+        info = describe() if callable(describe) else {}
+        if not isinstance(info, dict):
+            info = {}
+        data = {
+            "backend": session.backend_name,
+            "model_id": session.resolved_model_id,
+            "summary": self._backend_summary_line(),
+            "backend_info": info,
+        }
+        lines = [
+            f"backend: {data['backend']}",
+            f"model_id: {data['model_id']}",
+            f"summary: {data['summary']}",
+        ]
+        if self._show_opts().verbose:
+            for key in sorted(info.keys()):
+                lines.append(f"{key}: {info[key]}")
         return self._to_json_or_lines(data, lines)
 
     def _show_tools(self, argv: list[str]) -> str:
         del argv
         runtime = build_tool_runtime(self.runtime.args, self.runtime.session.backend_name)
         data = runtime.describe(verbose=self._show_opts().verbose)
+        backend_tooling: dict[str, object] = {}
+        if self.runtime.session.backend_name == "vllm":
+            backend_tooling = {
+                "enable_auto_tool_choice": self.runtime.args.vllm_enable_auto_tool_choice,
+                "tool_call_parser": self.runtime.args.vllm_tool_call_parser or "",
+            }
+        data["backend_tooling"] = backend_tooling
         lines = [
             f"backend: {data['backend']}",
             f"supported_backend: {data['supported_backend']}",
@@ -1400,6 +2116,10 @@ class UnifiedTuiApp(App):
             f"max_result_chars: {data['max_result_chars']}",
             f"tool_names: {data['tool_names']}",
         ]
+        if backend_tooling:
+            lines.append("backend_tooling:")
+            for key, value in backend_tooling.items():
+                lines.append(f"  {key}: {value}")
         if self._show_opts().verbose:
             lines.append("available_tools:")
             for name, item in sorted((data.get("available_tools") or {}).items()):
@@ -1604,3 +2324,4 @@ class UnifiedTuiApp(App):
         line = json.dumps(record.__dict__, ensure_ascii=False)
         with open(path, "a", encoding="utf-8") as fh:
             fh.write(line + "\n")
+SOFT_TEXT = "#e6dfcf"

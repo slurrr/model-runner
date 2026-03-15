@@ -2,7 +2,7 @@
 id = "/home/poop/ml/models/Qwen3.5-9B"
 
 [gen]
-max_context_tokens = 131072
+max_context_tokens = 49152
 max_new_tokens = 8192
 no_repeat_ngram_size = 0
 num_beams = 1
@@ -13,7 +13,7 @@ top_k = 20
 top_p = 0.95
 
 [prompt]
-chat_template = "models/Qwen3.5-9B/hf/templates/chat_template.jinja"
+chat_template = "~/ml/model-runner/models/Qwen3.5-9B/hf/templates/chat_template.jinja"
 prompt_mode = "chat"
 prompt_prefix = ""
 system = ""
@@ -22,13 +22,15 @@ user_prefix = ""
 
 [ui]
 assume_think = true
-history_strip_think = false
-hide_think = false
+history_strip_think = true
+hide_think = true
 no_animate_thinking = false
 save_transcript = ""
 capture_last_request = false
 scroll_lines = 9
-show_thinking = true
+show_thinking = false
+show_tool_activity = false
+show_tool_arguments = false
 strict_think_strip = false
 ui_max_events_per_tick = 64
 ui_tick_ms = 33
@@ -44,8 +46,12 @@ timeout_s = 10
 max_result_chars = 8000
 
 [backend.hf]
-attn_implementation = "sdpa"
+attn_implementation = "flash_attention_2"
 dtype = "bfloat16"
+device_map = "cuda:0"
+max_memory = "22.45GiB"
+low_cpu_mem_usage = true
+text_only = true
 use_4bit = false
 use_8bit = false
 log_file = ""

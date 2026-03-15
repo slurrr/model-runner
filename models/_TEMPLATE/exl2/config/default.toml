@@ -22,6 +22,8 @@ no_animate_thinking = false
 save_transcript = ""
 capture_last_request = false
 show_thinking = false
+show_tool_activity = false
+show_tool_arguments = false
 
 [tools]
 enabled = false

@@ -41,6 +41,30 @@ python tui.py --backend exl2 /path/to/exl2_model_dir
 Notes:
 - EXL2 setup can be finicky under WSL; see `docs/exl2_setup.md`.
 
+## Managed vLLM backend control
+
+Use the root helper commands when you want to run managed vLLM from repo config without entering the TUI.
+
+Examples:
+```bash
+# Foreground managed vLLM only
+./vllm-up --config Qwen3.5-9B
+
+# Detached managed vLLM only
+./vllm-up --config Qwen3.5-9B --bg
+
+# Stop detached managed vLLM for that config slot
+./vllm-down --config Qwen3.5-9B
+```
+
+Notes:
+- `./vllm-up` is a thin wrapper over `python tui.py --backend vllm --backend-only ...`
+- `--bg` adds `--detach-backend`
+- detached managed vLLM is reattachable from the TUI via the same config
+- from inside the TUI:
+  - `Ctrl+Q` or `/exit` leaves managed vLLM running
+  - `/quit` shuts managed vLLM down
+
 Notes:
 - `tui_app/` is an internal package used by `tui.py` (don’t run `tui_app/app.py` directly).
 - Backend detection is deterministic:

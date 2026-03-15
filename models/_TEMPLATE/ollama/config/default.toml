@@ -21,6 +21,8 @@ save_transcript = ""
 capture_last_request = false
 scroll_lines = 9
 show_thinking = false
+show_tool_activity = false
+show_tool_arguments = false
 ui_max_events_per_tick = 33
 ui_tick_ms = 33
 

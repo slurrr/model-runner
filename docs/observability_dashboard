@@ -1,0 +1,307 @@
+Local LLM Runtime Observability System — Build Requirements
+
+Objective
+Provide a unified observability system for a local LLM experimentation environment that allows real-time monitoring and analysis of inference performance across multiple backends (vLLM, ExLlamaV2, Transformers/PyTorch, GGUF runtimes, and future engines). The system must operate alongside an existing TUI-driven runner and expose standardized runtime metrics that enable model loading verification, performance tuning, and backend comparison.
+
+Scope
+The system introduces a metrics instrumentation layer within the model runner and an external visualization stack. The runner remains the control interface for experiments while the observability system provides passive monitoring and historical analysis.
+
+The system must support both production-grade inference engines (vLLM, ExLlamaV2) and experimental backends (raw Transformers/PyTorch) without requiring engine-specific dashboards.
+
+Primary Deliverables
+
+Metrics Instrumentation Layer (Runner Integration)
+A standardized instrumentation layer embedded within the runner process that exposes runtime metrics describing model configuration, GPU usage, inference throughput, latency, batching behavior, and KV-cache utilization.
+
+This layer must provide a unified metrics interface across all backends and expose metrics via a Prometheus-compatible HTTP endpoint.
+
+Functional deliverables:
+
+• metrics interface abstraction used by all engines
+• backend adapters for each inference engine
+• runtime metric collectors
+• metrics HTTP endpoint
+• metric lifecycle management during engine load/unload
+• experiment metadata tagging
+
+Supported backends:
+
+• vLLM
+• ExLlamaV2
+• HuggingFace Transformers / PyTorch
+• GGUF runtimes (llama.cpp based)
+• future custom engines
+
+Metrics must remain backend-agnostic and use the same schema regardless of runtime implementation.
+
+Metrics Schema Definition
+A standardized schema describing all metrics produced by the system. This schema ensures consistent visualization and enables cross-engine comparisons.
+
+The schema must define the following metric categories.
+
+Model Configuration Metrics
+
+Purpose: verify how a model actually loaded into memory.
+
+Required fields:
+
+• model_identifier
+• model_parameter_count
+• model_weight_bytes
+• model_dtype
+• kv_cache_dtype
+• quantization_type
+• context_length
+• engine_name
+• engine_version
+
+These metrics confirm whether the runtime configuration matches expected parameters.
+
+GPU Metrics
+
+Purpose: monitor hardware resource utilization.
+
+Required fields:
+
+• gpu_vram_total_bytes
+• gpu_vram_used_bytes
+• gpu_vram_reserved_bytes
+• gpu_vram_free_bytes
+• gpu_utilization_percent
+• gpu_memory_bandwidth_percent
+• gpu_power_usage_watts
+
+These metrics may be sourced from GPU exporters or internal collectors.
+
+PyTorch Runtime Metrics
+
+Purpose: detect memory allocation behavior and tensor usage within raw transformer backends.
+
+Required fields:
+
+• torch_cuda_memory_allocated_bytes
+• torch_cuda_memory_reserved_bytes
+• torch_cuda_max_allocated_bytes
+• torch_cuda_active_tensors
+
+These metrics help detect silent dtype promotion, memory fragmentation, or allocator behavior.
+
+KV Cache Metrics
+
+Purpose: monitor attention memory allocation and runtime usage.
+
+Required fields:
+
+• kv_cache_total_bytes
+• kv_cache_used_bytes
+• kv_cache_utilization_ratio
+• kv_cache_block_size
+• kv_cache_sequence_count
+
+These metrics are critical for tuning context length and batching parameters.
+
+Throughput Metrics
+
+Purpose: measure inference performance.
+
+Required fields:
+
+• tokens_generated_total
+• tokens_generated_per_second
+• effective_tokens_per_second
+• requests_completed_total
+• requests_in_flight
+• requests_queued
+
+Effective tokens/sec represents user-perceived performance including latency overhead.
+
+Latency Metrics
+
+Purpose: detect architectural bottlenecks.
+
+Required fields:
+
+• request_latency_seconds
+• prefill_latency_seconds
+• decode_latency_seconds
+• time_to_first_token_seconds
+
+Latency distributions must support percentile aggregation:
+
+• p50
+• p95
+• p99
+
+Batch Metrics
+
+Purpose: analyze batching efficiency and request aggregation.
+
+Required fields:
+
+• batch_size_current
+• batch_size_average
+• batch_tokens_current
+• batch_tokens_average
+
+Generation Metrics
+
+Purpose: monitor generation behavior and request characteristics.
+
+Required fields:
+
+• generation_tokens_requested
+• generation_tokens_output
+• generation_stop_reason
+• generation_streaming_enabled
+
+Experiment Metadata Metrics
+
+Purpose: tag and differentiate experimental runs.
+
+Required fields:
+
+• experiment_id
+• engine_name
+• quantization_type
+• kv_cache_quantization
+• attention_backend
+• model_variant
+
+These tags allow comparison between runs.
+
+Metrics Endpoint
+The runner must expose a Prometheus-compatible metrics endpoint accessible via HTTP.
+
+Deliverables:
+
+• standardized /metrics endpoint
+• structured metric export
+• scrape compatibility with external collectors
+• configurable update interval
+
+This endpoint serves as the sole data source for external monitoring systems.
+
+Observability Infrastructure
+A monitoring stack responsible for collecting, storing, and visualizing runtime metrics.
+
+Components required:
+
+• Prometheus metrics collector
+• Grafana visualization dashboard
+• GPU metrics exporter
+• system metrics exporter
+
+The infrastructure must operate locally without cloud dependencies and support persistent metric storage for experiment comparison.
+
+Visualization Dashboard
+A set of Grafana dashboards designed specifically for local inference tuning.
+
+Required dashboard panels.
+
+Hardware Panel
+
+Displays:
+
+• GPU utilization
+• VRAM usage
+• memory bandwidth
+• power consumption
+
+Model Panel
+
+Displays:
+
+• model size
+• dtype
+• quantization configuration
+• KV cache allocation
+
+Throughput Panel
+
+Displays:
+
+• tokens/sec
+• effective tokens/sec
+• requests/sec
+• batch size
+
+Latency Panel
+
+Displays:
+
+• time to first token
+• prefill latency
+• decode latency
+• request latency percentiles
+
+Cache Panel
+
+Displays:
+
+• KV cache usage
+• active sequences
+• context utilization
+
+Batch Panel
+
+Displays:
+
+• real-time batch size
+• batch token count
+• batching efficiency
+
+These panels provide the live feedback loop required for runtime tuning.
+
+Backend Metrics Adapters
+Each engine must include a metrics adapter that maps engine-specific information into the standardized schema.
+
+Adapters required for:
+
+• vLLM runtime metrics
+• ExLlamaV2 inference statistics
+• HuggingFace / PyTorch profiling metrics
+• GGUF runtime telemetry
+
+The adapter layer ensures dashboards remain consistent regardless of backend.
+
+Experiment Tracking Capability
+The system must support labeling and comparing experiments.
+
+Capabilities required:
+
+• experiment identifiers
+• configuration tagging
+• metric comparison across runs
+• time-series analysis of tuning changes
+
+This allows users to observe the effect of configuration changes such as context size, quantization format, or batching limits.
+
+Integration With Existing Runner
+The observability system must operate alongside the existing TUI-based model runner.
+
+Integration requirements:
+
+• TUI remains the control interface
+• dashboards operate as passive observers
+• metrics update in real time during experiments
+• no disruption to existing runner workflows
+
+The runner must remain responsible for:
+
+• model loading
+• experiment execution
+• backend selection
+
+The observability system remains read-only.
+
+System Outcome
+Completion of this system provides a unified runtime observability environment enabling:
+
+• verification of model loading behavior
+• monitoring of GPU and memory usage
+• measurement of inference performance
+• comparison of backend implementations
+• tuning of runtime parameters
+• identification of inference bottlenecks
+
+The system converts the local model runner into a full experimentation laboratory for LLM runtime optimization.

@@ -1,80 +1,150 @@
 # model-runner
 
-Lightweight local model runner scripts for:
-- Hugging Face text/chat models (`transformers` + `torch`)
-- GGUF models via `llama-cpp-python`
-- Ollama models via HTTP API with optional reasoning-filtered output
-- EXL2 models via ExLlamaV2 (unified TUI backend)
+`model-runner` is a local model lab: a practical workspace for running local models, comparing backends, tuning inference, and testing agent/application behavior without leaving a local-first environment.
 
-## User Guide
+This repo spans two overlapping jobs:
+- runtime and backend engineering
+- AI application, agent, and prompt experimentation
 
-### 1) Setup
+It is intentionally broad. It contains useful tooling, model-specific notes/configs/templates, backend adapters, and a growing observability direction for understanding what models are actually doing at runtime.
 
-Use the existing virtual env in this repo:
+## What This Repo Is
+
+This project is for local model research and tinkering:
+- run the same model across multiple backends
+- compare runtime behavior instead of guessing
+- keep model-specific notes, configs, templates, and prompts in-repo
+- test tool use, thinking behavior, context management, and backend quirks
+- build toward a real local observability and optimization workflow
+
+Supported runtime paths today include:
+- Hugging Face / `transformers` + `torch`
+- GGUF via `llama-cpp-python`
+- Ollama via HTTP
+- EXL2 via ExLlamaV2
+- OpenAI-compatible servers
+- managed vLLM
+
+## Current State
+
+This repo is already useful, but uneven.
+
+What exists now:
+- a multi-backend Textual TUI for local interaction and debugging
+- simple CLI entrypoints for isolated backend checks
+- model-first config/notes/templates layout under `models/`
+- a lot of backend standardization work around prompts, knobs, history, logging, token accounting, and tool calls
+
+What is still rough:
+- the TUI is a workable control surface, but not a polished observability product
+- backend comparison is possible, but not yet clean or visual enough for serious runtime learning
+- some runtime truths are still too hard to surface quickly
+
+If you want to just chat with models, the current tooling works.
+If you want to learn how backends really behave, optimize them, and compare them with confidence, the repo still needs a stronger observability layer.
+
+## Direction
+
+The direction is a **local model lab**, not “just a TUI.”
+
+That means:
+- keep local-first model execution
+- preserve backend diversity instead of collapsing everything into one engine
+- make runtime behavior visible and measurable
+- make tuning and comparison enjoyable, not forensic
+- move toward a browser-based observability and control surface for metrics, backend state, cache growth, memory behavior, and experiment comparison
+
+The existing observability direction is captured in:
+- [docs/observability_dashboard](/home/poop/ml/model-runner/docs/observability_dashboard)
+
+The current TUI should be thought of as:
+- a current interaction surface
+- a useful backend bring-up tool
+- not the final home for optimization, inspection, and comparison UX
+
+## Entry Points
+
+### Current control surface: unified TUI
+
+Use `tui.py` when you want a terminal UI for chat, streaming, thinking display, slash-command inspection, or fast backend switching.
+
+Optional: install the console entrypoint:
+```bash
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
+
+Examples:
+```bash
+tui Nanbeige4.1-3B
+python tui.py Nanbeige4.1-3B
+python tui.py --config Qwen3.5-9B --backend vllm
+```
+
+### Backend bring-up: managed vLLM helpers
+
+Use the helper commands when you want repo-configured managed vLLM without entering the TUI:
+
+```bash
+./vllm-up --config Qwen3.5-9B
+./vllm-up --config Qwen3.5-9B --bg
+./vllm-down --config Qwen3.5-9B
+```
+
+### Isolation/debug CLIs
+
+Use these when you want simpler, backend-specific loops:
+
+- `runner.py`
+  - minimal HF prompt -> completion
+- `chat.py`
+  - template-aware HF chat loop
+- `alex.py`
+  - GGUF chat via `llama-cpp-python`
+- `ollama_chat.py`
+  - Ollama streaming chat loop
+- `tui_chat.py`
+  - older HF-only Textual TUI kept as reference/debug aid
+
+More detail lives in:
+- [docs/entrypoints.md](/home/poop/ml/model-runner/docs/entrypoints.md)
+
+## Model-First Workspace
+
+The repo is organized around models first, then backends:
+
+- `models/<model>/<backend>/notes/`
+- `models/<model>/<backend>/config/`
+- `models/<model>/<backend>/templates/`
+- `models/<model>/<backend>/prompts/`
+
+That structure exists so research stays grounded:
+- notes next to configs
+- templates next to the model they affect
+- backend variants for the same model stay comparable
+
+To scaffold a new model folder:
+```bash
+python scripts/model add <model_name> <hf|gguf|ollama|exl2> [--id <backend_id>]
+```
+
+## Setup
+
+Use the repo venv:
 
 ```bash
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Optional (recommended): install a console entrypoint for the unified TUI:
-```bash
-pip install -e .
-```
+Optional backend extras:
+- GGUF: `pip install llama-cpp-python`
+- EXL2: see [docs/exl2_setup.md](/home/poop/ml/model-runner/docs/exl2_setup.md)
 
-Optional GGUF support:
+## Common Commands
 
-```bash
-pip install llama-cpp-python
-```
-
-Optional EXL2 support:
-
-- See `docs/exl2_setup.md`
-
-### 2) Scripts and What They Do
-
-- `runner.py`
-  - Simple prompt loop for text generation.
-  - Optional token streaming with `--stream`.
-  - Supports `-8bit` / `-4bit` (bitsandbytes) on CUDA.
-  - Best for non-chat generation tests.
-
-- `chat.py`
-  - Chat loop with conversation history.
-  - Uses tokenizer native chat template by default.
-  - Optional `--prompt-mode plain` for minimal role-formatted prompting (no chat template).
-  - Decodes assistant-only new tokens.
-  - Optional token streaming with `--stream`.
-  - Supports precision selection via `--dtype`.
-  - Default `--max-new-tokens` is `2048`.
-  - Supports `-8bit` / `-4bit` (CUDA only).
-
-- `tui_chat.py`
-  - Legacy Textual TUI for HF chat.
-  - Kept as migration reference.
-
-- `tui.py`
-  - Unified Textual TUI entrypoint for HF, GGUF, Ollama, and EXL2.
-  - Auto-detects backend from `model_id` or accepts `--backend`.
-  - Bottom grey input band with scrollable transcript above.
-  - Collapsible streaming thinking section per assistant turn.
-  - Hides `<think>` markers while routing inner content to a grey “thinking” panel.
-  - Optional `--assume-think` / `--no-assume-think` for models that emit only end-think markers.
-
-- `alex.py`
-  - GGUF chat runner via `llama-cpp-python`.
-  - Accepts Windows or WSL paths.
-  - Best for direct `.gguf` testing without Ollama.
-
-- `ollama_chat.py`
-  - Lightweight wrapper around Ollama `/api/chat`.
-  - Streams output and can hide reasoning blocks.
-  - Auto-detects Ollama host (`OLLAMA_HOST`, localhost, WSL gateway).
-
-### 3) Common Commands
-
-Unified TUI (recommended):
+Unified TUI:
 ```bash
 tui Nanbeige4.1-3B
 tui /mnt/d/models/your-model.gguf
@@ -82,15 +152,13 @@ tui ollama:your-ollama-model
 tui --backend exl2 /path/to/exl2_model_dir
 ```
 
-Hugging Face text run:
-
+HF text run:
 ```bash
 python runner.py Nanbeige4.1-3B
 python runner.py /home/poop/ml/models/Nanbeige4.1-3B -8bit
 ```
 
-Hugging Face chat run:
-
+HF chat run:
 ```bash
 python chat.py Nanbeige4.1-3B
 python chat.py Nanbeige4.1-3B --prompt-mode plain
@@ -98,126 +166,64 @@ python chat.py Nanbeige4.1-3B --dtype bfloat16
 python chat.py Nanbeige4.1-3B -4bit --dtype float16 --system "You are concise."
 ```
 
-Config-driven run (recommended):
-
+Config-driven run:
 ```bash
 python chat.py --config Nanbeige4.1-3B
 python chat.py --config models/Nanbeige4.1-3B/hf/config --max-new-tokens 1024
 python chat.py --config Nanbeige4.1-3B --stream
-python -m pip install -e .
-tui Nanbeige4.1-3B
-python tui.py Nanbeige4.1-3B
-python tui.py /mnt/d/models/your-model.gguf
-python tui.py /mnt/d/models/your-model.gguf --assume-think
-python tui.py ollama:your-ollama-model
-python tui.py ollama:your-ollama-model --backend ollama --ollama-think false
-python tui_chat.py --config Nanbeige4.1-3B
-python tui_chat.py --config Nanbeige4.1-3B --prompt-mode plain
 python runner.py --config Nanbeige4.1-3B
-```
-
-Template config:
-
-```bash
-mkdir -p models/MyModel/hf/config
-cp models/_TEMPLATE/hf/config/config.json models/MyModel/hf/config/config.json
+python tui.py --config Nanbeige4.1-3B --backend hf
 ```
 
 GGUF run:
-
 ```bash
 python alex.py "/mnt/d/models/your-model.gguf"
 ```
 
-Ollama API run:
-
+Ollama run:
 ```bash
 python ollama_chat.py "your-ollama-model" --think false
 python ollama_chat.py "your-ollama-model" --think false --strict-think-strip
 ```
 
-### 4) Path Notes
-
-- Bare names like `Nanbeige4.1-3B` auto-resolve to `~/ml/models/<name>` if present.
-- Windows paths are accepted by `chat.py`, `runner.py`, and `alex.py` and mapped to WSL style when possible.
-- In WSL, Windows drives are typically mounted under `/mnt/<drive-letter>/...`.
-
-### 5) Troubleshooting
-
-- `... is not a local folder and is not a valid model identifier`
-  - Use full local path or place model under `~/ml/models/<name>`.
-
-- Tokenizer conversion errors
-  - Ensure: `sentencepiece`, `tiktoken`, `protobuf` are installed.
-
-- PersonaPlex model fails in `runner.py`/`chat.py`
-  - Expected: PersonaPlex is speech-to-speech, not a text `AutoModelForCausalLM` checkpoint.
-
-- Ollama connection refused from WSL
-  - `ollama_chat.py` auto-detects host each run.
-  - If needed: `python ollama_chat.py "<model>" --host "http://<windows-ip>:11434"`.
-
 ## Configs
 
-- Config files live under `models/<model>/<backend>/config/`.
-- Current starter profile: `models/Nanbeige4.1-3B/hf/config/config.json`.
-- HF template profile: `models/_TEMPLATE/hf/config/config.json`.
+- Config files live under `models/<model>/<backend>/config/`
 - `--config` lookup supports:
   - direct file path
-  - path without `.json`
-  - directory containing `config.json` (e.g. `models/<model>/hf/config`)
-  - short name resolved under `models/<name>/<backend>/config/config.json` (e.g. `Nanbeige4.1-3B`)
+  - path without extension
+  - directory containing config
+  - short name resolved under `models/<name>/<backend>/config/`
 
 Precedence:
-
 1. CLI flags
 2. Config values
 3. Script defaults
 
-Selected HF knobs now exposed in CLI/config:
+## Troubleshooting
 
-- sampling: `temperature`, `top_p`, `top_k`, `typical_p`, `min_p`
-- output mode: `stream`
-- routing mode: `assume_think` (TUI)
-- length/termination: `max_new_tokens`, `max_time`, `stop_strings`
-- repetition/structure: `repetition_penalty`, `no_repeat_ngram_size`
-- decoding mode: `num_beams`
-- prompt control: `system`, `system_file`, `user_prefix`, `prompt_prefix`
-- template control (chat): `chat_template` (`default`, `search`, or template file path)
-- chat memory control: `max_context_tokens` (chat only)
+- `... is not a local folder and is not a valid model identifier`
+  - Use a full local path or place the model under `~/ml/models/<name>`
 
-## Contributor Guide
+- Tokenizer conversion errors
+  - Ensure `sentencepiece`, `tiktoken`, and `protobuf` are installed
 
-### Repo Structure
+- PersonaPlex model fails in `runner.py`/`chat.py`
+  - Expected: it is a speech-to-speech checkpoint, not a text causal LM
 
-- `runner.py`: baseline text generation flow.
-- `chat.py`: template-aware chat flow.
-- `tui.py` + `tui_app/`: unified Textual TUI + backend adapters.
-- `alex.py`: GGUF (`llama-cpp-python`) chat backend.
-- `ollama_chat.py`: Ollama HTTP streaming backend + filtering.
-- `models/`: model-first workspace for per-model config/notes/templates/prompts.
-- `docs/`: decisions/specs/audits for repo evolution.
-- `requirements.txt`: current `.venv` package lock-style snapshot.
-- `models/_shared/`: shared templates and prompt assets (organized by backend).
+- Ollama connection refused from WSL
+  - `ollama_chat.py` auto-detects host each run
+  - If needed: `python ollama_chat.py "<model>" --host "http://<windows-ip>:11434"`
 
-### Design Constraints
+## Contributor Notes
 
-- Keep scripts simple and local-first.
-- Prefer explicit, readable CLI behavior over framework complexity.
-- Do not mix speech-model pipelines into text runners.
-- Keep error messages direct and actionable.
+This repo is not trying to be a minimal polished app. It is trying to become a useful local model research environment.
 
-### Development Workflow
+When making changes:
+- prefer backend truth over inferred summaries
+- preserve local-first workflows
+- keep models comparable across backends where practical
+- document model/runtime quirks in-repo
+- treat observability as a first-class feature, not a nice-to-have
 
-1. Edit one script at a time.
-2. Run syntax checks:
-   - `python -m py_compile runner.py chat.py tui.py tui_chat.py alex.py ollama_chat.py`
-3. Validate script help output:
-   - `python <script>.py --help`
-4. Smoke-test with one known model per backend.
-
-### Extension Ideas
-
-- Add `Modelfile` parser support in `ollama_chat.py` for template/prefix parity.
-- Add optional transcript logging (`--log-file`).
-- Add streaming token timing metrics for latency debugging.
+The current TUI is still worth improving, but new work should not assume terminal UX is the final destination for runtime debugging and optimization.

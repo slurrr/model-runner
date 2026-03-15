@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shlex
 import shutil
@@ -12,6 +13,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from typing import Any
 
 from config_utils import apply_machine_model_root, load_config_layers
 from tui_app.backends.base import EventEmitter
@@ -86,32 +88,177 @@ def _supports_chat_template_flag(cmd_argv: list[str]) -> bool:
         probe = probe[: probe.index("serve") + 1]
     else:
         probe.append("serve")
-    probe.append("--help")
-    try:
-        out = subprocess.check_output(probe, text=True, stderr=subprocess.STDOUT, timeout=8)
-    except Exception:
+    for help_flag in ("--help", "--help=all"):
+        try:
+            out = subprocess.check_output(probe + [help_flag], text=True, stderr=subprocess.STDOUT, timeout=8)
+        except Exception:
+            continue
+        if "--chat-template" in out:
+            return True
+    return False
+
+
+def _slugify(value: str) -> str:
+    text = "".join(ch if ch.isalnum() else "-" for ch in (value or "").strip().lower())
+    text = "-".join(part for part in text.split("-") if part)
+    return text or "vllm"
+
+
+def _resolve_sidecar_path(args: argparse.Namespace, filename: str) -> str:
+    config_path = (getattr(args, "_config_path", "") or "").strip()
+    if config_path:
+        base_dir = os.path.join(os.path.dirname(config_path), "run")
+        return os.path.abspath(os.path.join(base_dir, filename))
+    stem = _slugify((getattr(args, "vllm_served_model_name", "") or getattr(args, "model_id", "") or "vllm"))
+    return os.path.abspath(os.path.join("/tmp", f"model-runner-{stem}-{filename}"))
+
+
+def _resolve_engine_log_paths(args: argparse.Namespace) -> tuple[str, str]:
+    config_path = (getattr(args, "_config_path", "") or "").strip()
+    base_dir = ""
+    if config_path:
+        base_dir = os.path.join(os.path.dirname(config_path), "logs")
+    else:
+        stem = _slugify((getattr(args, "vllm_served_model_name", "") or getattr(args, "model_id", "") or "vllm"))
+        base_dir = os.path.join("/tmp", f"model-runner-{stem}-logs")
+    return (
+        os.path.abspath(os.path.join(base_dir, "vllm-engine.stdout.log")),
+        os.path.abspath(os.path.join(base_dir, "vllm-engine.stderr.log")),
+    )
+
+
+def _ensure_parent_dir(path: str) -> None:
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
         return False
-    return "--chat-template" in out
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
 
 
-class _StreamTail:
-    def __init__(self, logger: FileLogger, source: str):
+def _stop_pid_group(pid: int, pgid: int | None = None) -> None:
+    if pid <= 0:
+        return
+    target_pgid = pgid
+    if target_pgid is None:
+        try:
+            target_pgid = os.getpgid(pid)
+        except Exception:
+            target_pgid = None
+    if target_pgid is not None:
+        try:
+            os.killpg(target_pgid, signal.SIGTERM)
+        except Exception:
+            pass
+        deadline = time.time() + 5.0
+        while time.time() < deadline:
+            if not _pid_alive(pid):
+                return
+            time.sleep(0.1)
+        try:
+            os.killpg(target_pgid, signal.SIGKILL)
+        except Exception:
+            pass
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except Exception:
+        return
+
+
+def _resolve_requested_template(args: argparse.Namespace) -> str:
+    requested_template = (args.chat_template or "").strip()
+    if not requested_template:
+        return ""
+    config_path = (getattr(args, "_config_path", "") or "").strip()
+    candidate = os.path.abspath(os.path.expanduser(requested_template))
+    if config_path and not os.path.isabs(os.path.expanduser(requested_template)):
+        candidate = os.path.abspath(os.path.join(os.path.dirname(config_path), requested_template))
+    if os.path.isfile(candidate):
+        return candidate
+    return requested_template
+
+
+def _build_signature(args: argparse.Namespace, model_id: str, template_requested_value: str) -> dict[str, Any]:
+    extra = args.vllm_extra_args or []
+    if isinstance(extra, str):
+        extra = shlex.split(extra)
+    return {
+        "backend": "vllm",
+        "mode": str(args.vllm_mode or "managed"),
+        "model_id": model_id,
+        "host": str(args.vllm_host or "127.0.0.1"),
+        "requested_port": int(args.vllm_port),
+        "cmd": str(args.vllm_cmd or "vllm"),
+        "served_model_name": str(args.vllm_served_model_name or ""),
+        "tensor_parallel_size": int(args.vllm_tensor_parallel_size or 0),
+        "gpu_memory_utilization": float(args.vllm_gpu_memory_utilization or 0),
+        "max_model_len": int(args.vllm_max_model_len or 0),
+        "generation_config": str(args.vllm_generation_config or ""),
+        "attention_backend": str(args.vllm_attention_backend or ""),
+        "dtype": str(args.vllm_dtype or ""),
+        "enable_auto_tool_choice": bool(args.vllm_enable_auto_tool_choice is True),
+        "tool_call_parser": str(args.vllm_tool_call_parser or ""),
+        "extra_args": [str(x) for x in extra if str(x).strip()],
+        "chat_template_requested": template_requested_value,
+    }
+
+
+def _load_control_file(path: str) -> dict[str, Any] | None:
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except Exception:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _write_control_file(path: str, data: dict[str, Any]) -> None:
+    _ensure_parent_dir(path)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+    os.replace(tmp, path)
+
+
+def _remove_control_file(path: str) -> None:
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        return
+    except Exception:
+        return
+
+
+class _FileTail:
+    def __init__(self, logger: FileLogger, source: str, path: str, start_offset: int, stop_event: threading.Event):
         self.logger = logger
         self.source = source
+        self.path = path
+        self.start_offset = max(0, int(start_offset))
+        self.stop_event = stop_event
 
-    def pump(self, stream) -> None:
+    def pump(self) -> None:
         try:
-            for line in iter(stream.readline, ""):
-                if not line:
-                    break
-                self.logger.log(line.rstrip(), source=self.source)
+            with open(self.path, "r", encoding="utf-8", errors="replace") as stream:
+                stream.seek(self.start_offset)
+                while not self.stop_event.is_set():
+                    line = stream.readline()
+                    if line:
+                        self.logger.log(line.rstrip(), source=self.source)
+                        continue
+                    time.sleep(0.15)
         except Exception:
             return
-        finally:
-            try:
-                stream.close()
-            except Exception:
-                pass
 
 
 class VLLMSession:
@@ -127,13 +274,32 @@ class VLLMSession:
         api_key: str,
         template_info: dict[str, object],
         logger: FileLogger,
+        control_file_path: str,
+        managed_pid: int,
+        managed_pgid: int | None,
+        attached_existing: bool,
+        engine_stdout_start: int = 0,
+        engine_stderr_start: int = 0,
+        tail_stop_event: threading.Event | None = None,
+        tail_threads: list[threading.Thread] | None = None,
         tokenizer=None,
     ):
         self.args = args
         self._process = process
+        self._managed_pid = int(managed_pid)
+        self._managed_pgid = managed_pgid
         self._launch_argv = launch_argv
         self._base_url = base_url
         self.logger = logger
+        self._control_file_path = control_file_path
+        self._engine_stdout_path = ""
+        self._engine_stderr_path = ""
+        self._engine_stdout_start = max(0, int(engine_stdout_start))
+        self._engine_stderr_start = max(0, int(engine_stderr_start))
+        self._attached_existing = bool(attached_existing)
+        self._tail_stop_event = tail_stop_event
+        self._tail_threads = list(tail_threads or [])
+        self._shutdown_on_close = True
         self._closed = False
         self._tokenizer = tokenizer
         self._transport = OpenAIHTTPSession(
@@ -151,8 +317,16 @@ class VLLMSession:
     def describe(self) -> dict[str, object]:
         info = dict(self._transport.describe())
         info["managed_mode"] = True
-        info["pid"] = self._process.pid
+        info["pid"] = self._managed_pid
         info["launch_argv"] = " ".join(shlex.quote(part) for part in self._launch_argv)
+        info["enable_auto_tool_choice"] = self.args.vllm_enable_auto_tool_choice
+        info["tool_call_parser"] = self.args.vllm_tool_call_parser or ""
+        info["control_file"] = self._control_file_path
+        info["engine_stdout_path"] = self._engine_stdout_path
+        info["engine_stderr_path"] = self._engine_stderr_path
+        info["engine_stdout_start"] = self._engine_stdout_start
+        info["engine_stderr_start"] = self._engine_stderr_start
+        info["attached_existing"] = self._attached_existing
         return info
 
     def get_recent_logs(self, n: int = 80, sources: list[str] | None = None) -> list[str]:
@@ -166,6 +340,9 @@ class VLLMSession:
         if callable(getter):
             return getter()
         return None
+
+    def detach(self) -> None:
+        self._shutdown_on_close = False
 
     @staticmethod
     def _sanitize_messages_for_preflight(messages: list[dict[str, object]]) -> list[dict[str, object]] | None:
@@ -269,7 +446,12 @@ class VLLMSession:
         }
 
     def generate_turn(self, turn_id: int, messages: list[dict[str, object]], emit: EventEmitter) -> None:
-        if self._process.poll() is not None:
+        process_dead = False
+        if self._process is not None:
+            process_dead = self._process.poll() is not None
+        else:
+            process_dead = not _pid_alive(self._managed_pid)
+        if process_dead:
             tail_rows = self.logger.get_recent_logs(40)
             tail = "\n".join(tail_rows) if tail_rows else "(no captured logs)"
             emit(
@@ -312,31 +494,16 @@ class VLLMSession:
         if self._closed:
             return
         self._closed = True
-        if self._process.poll() is None:
+        if self._tail_stop_event is not None:
+            self._tail_stop_event.set()
+        for thread in self._tail_threads:
             try:
-                pgid = os.getpgid(self._process.pid)
-                os.killpg(pgid, signal.SIGTERM)
+                thread.join(timeout=0.5)
             except Exception:
-                try:
-                    self._process.terminate()
-                except Exception:
-                    pass
-            try:
-                self._process.wait(timeout=5.0)
-            except Exception:
-                try:
-                    pgid = os.getpgid(self._process.pid)
-                    os.killpg(pgid, signal.SIGKILL)
-                except Exception:
-                    try:
-                        self._process.kill()
-                    except Exception:
-                        pass
-                try:
-                    self._process.wait(timeout=2.0)
-                except Exception:
-                    pass
-
+                pass
+        if self._shutdown_on_close:
+            _stop_pid_group(self._managed_pid, self._managed_pgid)
+            _remove_control_file(self._control_file_path)
         self.logger.close()
 
 
@@ -373,6 +540,11 @@ def _build_launch_argv(args: argparse.Namespace, host: str, port: int, model_id:
         launch.extend(["--attention-backend", str(args.vllm_attention_backend).strip()])
     if (args.vllm_dtype or "").strip():
         launch.extend(["--dtype", str(args.vllm_dtype).strip()])
+    if args.vllm_enable_auto_tool_choice is True:
+        launch.append("--enable-auto-tool-choice")
+    parser_name = str(args.vllm_tool_call_parser or "").strip()
+    if parser_name:
+        launch.extend(["--tool-call-parser", parser_name])
 
     extra = args.vllm_extra_args or []
     if isinstance(extra, str):
@@ -385,7 +557,7 @@ def _build_launch_argv(args: argparse.Namespace, host: str, port: int, model_id:
 
 
 def _wait_until_ready(
-    process: subprocess.Popen,
+    process: subprocess.Popen | None,
     *,
     base_url: str,
     timeout_s: float,
@@ -394,7 +566,7 @@ def _wait_until_ready(
     deadline = time.time() + max(5.0, min(120.0, timeout_s))
     err_last = ""
     while time.time() < deadline:
-        if process.poll() is not None:
+        if process is not None and process.poll() is not None:
             raise RuntimeError("vLLM process exited before readiness probe succeeded.")
         try:
             _json_get(_join_url(base_url, "/models"), timeout_s=2.0, api_key=api_key)
@@ -430,7 +602,7 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
                 include_machine=True,
             )
             cfg_model_id = (merged.get("model_id") or "").strip() if isinstance(merged, dict) else ""
-            if cfg_model_id:
+            if not model_id and cfg_model_id:
                 model_id = apply_machine_model_root(cfg_model_id)
         except Exception:
             pass
@@ -438,13 +610,99 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
         raise RuntimeError("vLLM managed mode requires model_id (path or model name).")
 
     host = (args.vllm_host or "127.0.0.1").strip()
-    port = int(args.vllm_port)
-    if port < 0:
+    requested_port = int(args.vllm_port)
+    if requested_port < 0:
         raise RuntimeError("vLLM port must be >= 0.")
+    api_key = _resolve_api_key(args)
+    template_requested_value = _resolve_requested_template(args)
+    signature = _build_signature(args, model_id, template_requested_value)
+    control_file_path = _resolve_sidecar_path(args, "vllm-managed.json")
+    existing = _load_control_file(control_file_path)
+    if existing:
+        existing_pid = int(existing.get("pid") or 0)
+        if not _pid_alive(existing_pid):
+            _remove_control_file(control_file_path)
+            existing = None
+        elif existing.get("signature") != signature:
+            raise RuntimeError(
+                "Detached managed vLLM is already running for this config slot with different settings. "
+                f"Stop it first with: python tui.py --config {shlex.quote((getattr(args, '_config_path', '') or getattr(args, 'model_id', '') or '').strip())} --backend vllm --shutdown-backend"
+            )
+    if existing:
+        base_url = normalize_openai_base_url(str(existing.get("base_url") or "").strip())
+        if not base_url:
+            raise RuntimeError(f"Detached vLLM control file is missing base_url: {control_file_path}")
+        _wait_until_ready(process=None, base_url=base_url, timeout_s=float(args.vllm_timeout_s), api_key=api_key)
+        resolved_model_id = _resolve_model_from_models_endpoint(
+            base_url,
+            timeout_s=float(args.vllm_timeout_s),
+            api_key=api_key,
+            served_model_name=(args.vllm_served_model_name or "").strip(),
+        )
+        logger = FileLogger.from_value(
+            getattr(args, "vllm_log_file", ""),
+            "backend",
+            config_path=getattr(args, "_config_path", None),
+        )
+        tail_stop_event = threading.Event()
+        tail_threads: list[threading.Thread] = []
+        for source_key, source_name in (("engine_stdout_path", "engine_stdout"), ("engine_stderr_path", "engine_stderr")):
+            path = str(existing.get(source_key) or "").strip()
+            if not path or not os.path.isfile(path):
+                continue
+            start_offset = os.path.getsize(path)
+            thread = threading.Thread(
+                target=_FileTail(logger, source_name, path, start_offset, tail_stop_event).pump,
+                daemon=True,
+            )
+            thread.start()
+            tail_threads.append(thread)
+        template_info = dict(existing.get("template_info") or {})
+        tokenizer = None
+        if AutoTokenizer is not None:
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(model_id)
+            except Exception:
+                try:
+                    tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False)
+                except Exception:
+                    tokenizer = None
+        if tokenizer is not None and bool(template_info.get("chat_template_applied")):
+            template_path = str(template_info.get("chat_template_requested") or "").strip()
+            if template_path and os.path.isfile(template_path):
+                try:
+                    with open(template_path, "r", encoding="utf-8") as fh:
+                        tokenizer.chat_template = fh.read()
+                except Exception:
+                    pass
+        logger.log(f"attached_existing base_url={base_url} model={resolved_model_id}", source="backend")
+        session = VLLMSession(
+            args=args,
+            process=None,
+            launch_argv=list(existing.get("launch_argv") or []),
+            base_url=base_url,
+            resolved_model_id=resolved_model_id,
+            tokenizer=tokenizer,
+            api_key=api_key,
+            template_info=template_info,
+            logger=logger,
+            control_file_path=control_file_path,
+            managed_pid=existing_pid,
+            managed_pgid=int(existing.get("pgid") or 0) or None,
+            attached_existing=True,
+            engine_stdout_start=os.path.getsize(str(existing.get("engine_stdout_path") or "")) if str(existing.get("engine_stdout_path") or "") and os.path.isfile(str(existing.get("engine_stdout_path") or "")) else 0,
+            engine_stderr_start=os.path.getsize(str(existing.get("engine_stderr_path") or "")) if str(existing.get("engine_stderr_path") or "") and os.path.isfile(str(existing.get("engine_stderr_path") or "")) else 0,
+            tail_stop_event=tail_stop_event,
+            tail_threads=tail_threads,
+        )
+        session._engine_stdout_path = str(existing.get("engine_stdout_path") or "")
+        session._engine_stderr_path = str(existing.get("engine_stderr_path") or "")
+        return session
+
+    port = requested_port
     if port == 0:
         port = _pick_free_port(host)
     base_url = normalize_openai_base_url((args.vllm_base_url or "").strip() or f"http://{host}:{port}")
-    api_key = _resolve_api_key(args)
 
     launch_argv = _build_launch_argv(args, host=host, port=port, model_id=model_id)
     requested_template = (args.chat_template or "").strip()
@@ -469,28 +727,54 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
     )
     logger.log(f"launch_argv: {' '.join(shlex.quote(p) for p in launch_argv)}", source="app")
 
+    stdout_path, stderr_path = _resolve_engine_log_paths(args)
+    _ensure_parent_dir(stdout_path)
+    _ensure_parent_dir(stderr_path)
+    stdout_start = os.path.getsize(stdout_path) if os.path.isfile(stdout_path) else 0
+    stderr_start = os.path.getsize(stderr_path) if os.path.isfile(stderr_path) else 0
+    stdout_fh = open(stdout_path, "a", encoding="utf-8")
+    stderr_fh = open(stderr_path, "a", encoding="utf-8")
     try:
         process = subprocess.Popen(
             launch_argv,
             shell=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=stdout_fh,
+            stderr=stderr_fh,
             text=True,
             bufsize=1,
             preexec_fn=os.setsid,
         )
     except OSError as exc:
+        stdout_fh.close()
+        stderr_fh.close()
         if port != 0 and ("address already in use" in str(exc).lower() or "98" in str(exc)):
             raise RuntimeError(
                 f"Failed to launch vLLM on {host}:{port} (port busy). "
                 f"Check: ss -ltnp | rg :{port}"
             ) from exc
         raise RuntimeError(f"Failed to launch vLLM process: {exc}") from exc
+    finally:
+        try:
+            stdout_fh.close()
+        except Exception:
+            pass
+        try:
+            stderr_fh.close()
+        except Exception:
+            pass
 
-    if process.stdout is not None:
-        threading.Thread(target=_StreamTail(logger, "engine_stdout").pump, args=(process.stdout,), daemon=True).start()
-    if process.stderr is not None:
-        threading.Thread(target=_StreamTail(logger, "engine_stderr").pump, args=(process.stderr,), daemon=True).start()
+    tail_stop_event = threading.Event()
+    tail_threads: list[threading.Thread] = []
+    for path, start_offset, source in (
+        (stdout_path, stdout_start, "engine_stdout"),
+        (stderr_path, stderr_start, "engine_stderr"),
+    ):
+        thread = threading.Thread(
+            target=_FileTail(logger, source, path, start_offset, tail_stop_event).pump,
+            daemon=True,
+        )
+        thread.start()
+        tail_threads.append(thread)
 
     try:
         _wait_until_ready(process, base_url=base_url, timeout_s=float(args.vllm_timeout_s), api_key=api_key)
@@ -540,7 +824,34 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
         except Exception:
             pass
 
-    return VLLMSession(
+    try:
+        pgid = os.getpgid(process.pid)
+    except Exception:
+        pgid = None
+    template_info = {
+        "template_control_level": "managed_server_template",
+        "chat_template_requested": template_requested_value,
+        "chat_template_applied": template_applied,
+        "chat_template_reason": template_reason,
+    }
+    _write_control_file(
+        control_file_path,
+        {
+            "backend": "vllm",
+            "pid": process.pid,
+            "pgid": pgid,
+            "base_url": base_url,
+            "resolved_model_id": resolved_model_id,
+            "launch_argv": launch_argv,
+            "signature": signature,
+            "engine_stdout_path": stdout_path,
+            "engine_stderr_path": stderr_path,
+            "template_info": template_info,
+            "created_at": time.time(),
+        },
+    )
+
+    session = VLLMSession(
         args=args,
         process=process,
         launch_argv=launch_argv,
@@ -548,11 +859,38 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
         resolved_model_id=resolved_model_id,
         tokenizer=tokenizer,
         api_key=api_key,
-        template_info={
-            "template_control_level": "managed_server_template",
-            "chat_template_requested": template_requested_value,
-            "chat_template_applied": template_applied,
-            "chat_template_reason": template_reason,
-        },
+        template_info=template_info,
         logger=logger,
+        control_file_path=control_file_path,
+        managed_pid=process.pid,
+        managed_pgid=pgid,
+        attached_existing=False,
+        engine_stdout_start=stdout_start,
+        engine_stderr_start=stderr_start,
+        tail_stop_event=tail_stop_event,
+        tail_threads=tail_threads,
     )
+    session._engine_stdout_path = stdout_path
+    session._engine_stderr_path = stderr_path
+    return session
+
+
+def shutdown_managed_server(args: argparse.Namespace) -> dict[str, object]:
+    control_file_path = _resolve_sidecar_path(args, "vllm-managed.json")
+    existing = _load_control_file(control_file_path)
+    if not existing:
+        return {"stopped": False, "reason": "not_found", "control_file": control_file_path}
+    pid = int(existing.get("pid") or 0)
+    pgid = int(existing.get("pgid") or 0) or None
+    if not _pid_alive(pid):
+        _remove_control_file(control_file_path)
+        return {"stopped": False, "reason": "stale", "control_file": control_file_path, "pid": pid}
+    _stop_pid_group(pid, pgid)
+    _remove_control_file(control_file_path)
+    return {
+        "stopped": True,
+        "reason": "terminated",
+        "control_file": control_file_path,
+        "pid": pid,
+        "base_url": existing.get("base_url"),
+    }

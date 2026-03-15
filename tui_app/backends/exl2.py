@@ -523,7 +523,7 @@ class EXL2Session:
                     if partial:
                         resume_messages.append({"role": "assistant", "content": partial})
                     stage = "context_rebuild"
-                    input_ids, resume_trimmed, _ = apply_context_limit_exl2(
+                    input_ids, resume_trimmed, _, _ = apply_context_limit_exl2(
                         self.runtime.tokenizer,
                         template_text=template_text,
                         messages=resume_messages,

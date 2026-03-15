@@ -1,4 +1,33 @@
+  Examples:
+
+  .venv/bin/python -m vllm.entrypoints.cli.main serve --help=all | rg "FLASH|flash|attn|attention"
+
+  For FlashInfer specifically:
+
+  .venv/bin/python -m vllm.entrypoints.cli.main serve --help=all | rg "FLASHINFER|flashinfer"
+
+  For KV cache options:
+
+  .venv/bin/python -m vllm.entrypoints.cli.main serve --help=all | rg "kv-cache|kv cache|fp8"
+
+  If you want to see the attention backend enum line only:
+
+  .venv/bin/python -m vllm.entrypoints.cli.main serve --help=all | rg "^  --attention-backend"
+
+  And if you want a bit of surrounding context:
+
+  .venv/bin/python -m vllm.entrypoints.cli.main serve --help=all | rg -n -C 3 "attention-backend|FLASHINFER|kv-cache-dtype|fp8"
+
 # Useful CLI Commands
+
+# Repo-local command surface
+# Add once per shell/session:
+export PATH="/home/poop/ml/model-runner/bin:$PATH"
+
+# Managed vLLM from repo config
+./vllm-up --config Qwen3.5-9B
+./vllm-up --config Qwen3.5-9B --bg
+./vllm-down --config Qwen3.5-9B
 # nvidia-smi with GPU utilization, memory usage, temperature, and power draw, updated every 0.5 seconds, formatted in a readable table
 nvidia-smi --query-gpu=index,name,utilization.gpu,utilization.memory,memory.used,memory.total,temperature.gpu,power.draw
 --format=csv,noheader,nounits -l 0.5 \
@@ -176,5 +205,3 @@ import flash_attn, torch
 print("flash_attn", flash_attn.__version__)
 print("torch", torch.__version__, "cuda", torch.version.cuda)
 PY
-
-
