@@ -28,6 +28,25 @@ build/
 transcripts/
 outputs/
 config/machine.toml
+docs/downstream/
+docs/**/artifacts/
+
+# Local telemetry / runtime artifacts
+telemetry/
+**/telemetry/
+models/**/config/logs/
+*.jsonl
+*session*.json
+*session*.jsonl
+
+# Machine-local config files
+config.local.toml
+config.local.json
+*.local.toml
+*.local.json
+machine.toml
+machine.json
+models/**/config/config.json
 
 # Model files (keep weights out of git if they ever land here)
 *.safetensors
@@ -44,6 +63,13 @@ models/**
 !models/**/notes/**
 !models/**/config/**
 !models/**/templates/**
+# Re-ignore machine/runtime artifacts inside otherwise allowed config trees
+models/**/config/config.json
+models/**/config/logs/**
+models/**/config/telemetry/**
+models/**/config/**/*.jsonl
+models/**/config/**/*session*.json
+models/**/config/**/*session*.jsonl
 # Never commit prompts (may contain secrets)
 models/**/prompts/**
 !models/**/prompts/README.md

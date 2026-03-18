@@ -116,6 +116,7 @@ class ToolRuntime:
     enabled: bool
     mode: str
     schema_file: str
+    tool_choice: str
     allow: list[str]
     deny: list[str]
     max_calls_per_turn: int
@@ -141,6 +142,7 @@ class ToolRuntime:
             "enabled": self.enabled,
             "mode": self.mode,
             "schema_file": self.schema_file or "",
+            "tool_choice": self.tool_choice or "",
             "allow": list(self.allow),
             "deny": list(self.deny),
             "max_calls_per_turn": self.max_calls_per_turn,
@@ -377,6 +379,7 @@ def build_tool_runtime(args, backend_name: str) -> ToolRuntime:
         enabled=enabled,
         mode=mode,
         schema_file=_resolve_path(schema_file, config_path=getattr(args, "_config_path", None)) if schema_file else "",
+        tool_choice=str(getattr(args, "tools_tool_choice", "") or "").strip(),
         allow=allow,
         deny=deny,
         max_calls_per_turn=max(1, int(getattr(args, "tools_max_calls_per_turn", 3) or 3)),

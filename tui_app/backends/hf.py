@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import queue
@@ -10,6 +11,10 @@ import time
 
 import torch
 from transformers import AutoModelForCausalLM, AutoProcessor, AutoTokenizer
+try:
+    from transformers import BitsAndBytesConfig
+except Exception:
+    BitsAndBytesConfig = None  # type: ignore
 from transformers.generation.streamers import BaseStreamer
 
 try:
@@ -48,6 +53,20 @@ def resolve_dtype(dtype_name: str, device: str):
     if dtype_name == "auto":
         return torch.float16 if device == "cuda" else torch.float32
     return parse_dtype(dtype_name)
+
+
+def _parse_cuda_index(device_str: str | None) -> int | None:
+    if not device_str:
+        return None
+    raw = str(device_str)
+    if raw == "cuda":
+        return 0
+    if raw.startswith("cuda:"):
+        try:
+            return int(raw.split(":", 1)[1])
+        except Exception:
+            return None
+    return None
 
 
 def resolve_model_id(model_id: str) -> str:
@@ -184,6 +203,19 @@ def render_plain_prompt(messages):
     return "\n".join(parts)
 
 
+def _parse_hf_max_memory(raw: str):
+    value = (raw or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except Exception:
+        return {0: value}
+    if isinstance(parsed, dict):
+        return parsed
+    return {0: value}
+
+
 def build_model_inputs(tokenizer, messages, prompt_mode):
     if prompt_mode == "plain":
         prompt = render_plain_prompt(messages)
@@ -271,6 +303,31 @@ def _infer_context_window(model, tokenizer) -> int | None:
     return None
 
 
+def _normalize_eos_token_ids(eos_token_id) -> set[int]:
+    if isinstance(eos_token_id, int):
+        return {int(eos_token_id)}
+    if isinstance(eos_token_id, (list, tuple, set)):
+        return {int(value) for value in eos_token_id if isinstance(value, int)}
+    return set()
+
+
+def _infer_hf_finish_reason(
+    *,
+    generated_token_ids: list[int],
+    completion_tokens: int,
+    max_new_tokens: int | None,
+    eos_token_id,
+) -> tuple[str | None, str | None]:
+    if isinstance(max_new_tokens, int) and max_new_tokens > 0 and completion_tokens >= max_new_tokens:
+        return "length", "local_max_new_tokens_cap"
+    eos_token_ids = _normalize_eos_token_ids(eos_token_id)
+    if generated_token_ids and eos_token_ids and int(generated_token_ids[-1]) in eos_token_ids:
+        return "stop", "local_eos_token"
+    if completion_tokens > 0:
+        return "stop", "local_hf_stopping_criteria"
+    return None, None
+
+
 def apply_context_limit(
     tokenizer,
     messages,
@@ -328,6 +385,7 @@ class TokenCountingTextIteratorStreamer(BaseStreamer):
         self.print_len = 0
         self.next_tokens_are_prompt = True
         self.generated_token_count = 0
+        self.generated_token_ids = []
         self.mode = "think" if assume_think else "answer"
         self.start_marker_ids = self._single_token_marker_ids(
             ["<think>", "<|begin_of_thought|>", "<｜begin_of_thought｜>", "<｜begin▁of▁thought｜>"]
@@ -370,6 +428,7 @@ class TokenCountingTextIteratorStreamer(BaseStreamer):
 
         token_ids = value.tolist()
         self.generated_token_count += len(token_ids)
+        self.generated_token_ids.extend(int(token_id) for token_id in token_ids)
         think_inc = 0
         for token_id in token_ids:
             if token_id in self.start_marker_ids:
@@ -472,9 +531,102 @@ class HFSession:
         return self.logger.list_log_sources()
 
     def describe(self) -> dict[str, object]:
+        weights_quantization = "8bit" if bool(getattr(self.args, "use_8bit", False)) else "4bit" if bool(getattr(self.args, "use_4bit", False)) else "none"
+        model = self.model
+        context_length_effective = _infer_context_window(model, self.tokenizer)
+        runtime_attn = getattr(getattr(model, "config", None), "_attn_implementation", None)
+        runtime_dtype = None
+        runtime_device = None
+        try:
+            first_param = next(model.parameters())
+            runtime_dtype = str(first_param.dtype).replace("torch.", "")
+            runtime_device = str(first_param.device)
+        except Exception:
+            runtime_dtype = str(getattr(self.args, "dtype", "auto"))
+            runtime_device = self.input_device
+
+        raw_device_map = getattr(model, "hf_device_map", None)
+        requested_device_map = getattr(self.args, "hf_device_map", "") or ("auto" if self.input_device == "cuda" else "none")
+        if isinstance(raw_device_map, dict):
+            device_map_repr = dict(raw_device_map)
+            map_values = [str(v) for v in raw_device_map.values()]
+            modules_on_cpu = sum(1 for v in map_values if v == "cpu")
+            modules_on_disk = sum(1 for v in map_values if v == "disk")
+            gpu_targets = sorted({v for v in map_values if v.startswith("cuda") or v.isdigit()})
+            fully_on_single_gpu = modules_on_cpu == 0 and modules_on_disk == 0 and len(gpu_targets) == 1
+        else:
+            device_map_repr = requested_device_map
+            normalized_target = str(runtime_device)
+            fully_on_single_gpu = normalized_target.startswith("cuda")
+            modules_on_cpu = 0 if fully_on_single_gpu else None
+            modules_on_disk = 0
+
+        memory_footprint_bytes = None
+        try:
+            memory_footprint_bytes = int(model.get_memory_footprint())
+        except Exception:
+            memory_footprint_bytes = None
+
+        if memory_footprint_bytes is None:
+            memory_footprint = "unavailable"
+        else:
+            memory_footprint = f"{memory_footprint_bytes / (1024 ** 3):.2f} GiB"
+
+        cuda_allocated = None
+        cuda_reserved = None
+        cuda_max_allocated = None
+        cuda_max_reserved = None
+        cuda_index = _parse_cuda_index(runtime_device)
+        if cuda_index is not None and torch.cuda.is_available():
+            try:
+                cuda_allocated = int(torch.cuda.memory_allocated(cuda_index))
+                cuda_reserved = int(torch.cuda.memory_reserved(cuda_index))
+                cuda_max_allocated = int(torch.cuda.max_memory_allocated(cuda_index))
+                cuda_max_reserved = int(torch.cuda.max_memory_reserved(cuda_index))
+            except Exception:
+                pass
+
+        def _fmt_bytes(value: int | None) -> str:
+            if value is None:
+                return "unavailable"
+            return f"{value / (1024 ** 3):.2f} GiB"
+
+        max_memory_raw = getattr(self.args, "hf_max_memory", "") or "(unset)"
+        max_memory_effective = bool(str(requested_device_map).lower() in {"auto", "balanced", "balanced_low_0", "sequential"})
+
+        qwen_fast_path_available = None
+        if read_model_type(self.resolved_model_id) == "qwen3_5":
+            has_fla = importlib.util.find_spec("fla") is not None
+            has_causal_conv1d = importlib.util.find_spec("causal_conv1d") is not None
+            qwen_fast_path_available = bool(has_fla and has_causal_conv1d)
+
         return {
             "template_control_level": "local_template",
             "supports_images": self.supports_images,
+            "weights_quantization": weights_quantization,
+            "kv_cache_quantization": "none",
+            "torch_dtype": str(getattr(self.args, "dtype", "auto")),
+            "torch_dtype_effective": runtime_dtype,
+            "hf_attn_implementation": getattr(self.args, "hf_attn_implementation", None) or "default",
+            "attention_backend_effective": runtime_attn or "unknown",
+            "hf_device_map": device_map_repr,
+            "hf_max_memory": max_memory_raw,
+            "hf_max_memory_effective": max_memory_effective,
+            "hf_low_cpu_mem_usage": getattr(self.args, "hf_low_cpu_mem_usage", None),
+            "runtime_device": runtime_device,
+            "context_length_effective": context_length_effective,
+            "modules_on_cpu": modules_on_cpu,
+            "modules_on_disk": modules_on_disk,
+            "fully_on_single_gpu": fully_on_single_gpu,
+            "memory_footprint": memory_footprint,
+            "memory_footprint_bytes": memory_footprint_bytes,
+            "cuda_memory_allocated": _fmt_bytes(cuda_allocated),
+            "cuda_memory_reserved": _fmt_bytes(cuda_reserved),
+            "cuda_max_memory_allocated": _fmt_bytes(cuda_max_allocated),
+            "cuda_max_memory_reserved": _fmt_bytes(cuda_max_reserved),
+            "qwen_fast_path_available": qwen_fast_path_available,
+            "context_allocation": "grows_with_sequence",
+            "text_only_mode": bool(getattr(self.args, "hf_text_only", False)),
             **self.template_info,
         }
 
@@ -616,12 +768,14 @@ class HFSession:
                 if gen_error:
                     raise RuntimeError(str(gen_error[0]))
                 completion_tokens = int(getattr(streamer, "generated_token_count", 0))
+                generated_token_ids = [int(token_id) for token_id in getattr(streamer, "generated_token_ids", [])]
             else:
                 input_len = model_inputs["input_ids"].shape[-1]
                 with torch.no_grad():
                     outputs = model.generate(**model_inputs, **generate_kwargs)
                 new_tokens = outputs[0, input_len:].tolist()
                 completion_tokens = len(new_tokens)
+                generated_token_ids = [int(token_id) for token_id in new_tokens]
                 for token_id in new_tokens:
                     emit(Meta(turn_id=turn_id, key="generated_tokens_inc", value=1))
                     piece = tokenizer.decode(
@@ -655,7 +809,24 @@ class HFSession:
             throughput = None
             if completion_tokens > 0 and elapsed > 0:
                 throughput = {"tokens_per_s": completion_tokens / elapsed}
+            finish_reason, finish_reason_source = _infer_hf_finish_reason(
+                generated_token_ids=generated_token_ids,
+                completion_tokens=int(completion_tokens),
+                max_new_tokens=args.max_new_tokens,
+                eos_token_id=tokenizer.eos_token_id,
+            )
             answer_text = "".join(answer_parts)
+            gen = {
+                "max_new_tokens": args.max_new_tokens,
+                "temperature": args.temperature,
+                "top_p": args.top_p,
+                "top_k": args.top_k,
+                "repetition_penalty": args.repetition_penalty,
+            }
+            if finish_reason is not None:
+                gen["finish_reason"] = finish_reason
+            if finish_reason_source is not None:
+                gen["finish_reason_source"] = finish_reason_source
             record = TurnRecord(
                 raw="".join(raw_parts),
                 think="".join(think_parts),
@@ -663,13 +834,7 @@ class HFSession:
                 ended_in_think=(router.mode == "think"),
                 backend=self.backend_name,
                 model_id=self.resolved_model_id,
-                gen={
-                    "max_new_tokens": args.max_new_tokens,
-                    "temperature": args.temperature,
-                    "top_p": args.top_p,
-                    "top_k": args.top_k,
-                    "repetition_penalty": args.repetition_penalty,
-                },
+                gen=gen,
                 timing={"start": started, "end": ended, "elapsed": elapsed},
                 token_counts={
                     "prompt_tokens": prompt_tokens,
@@ -717,7 +882,7 @@ def create_session(args: argparse.Namespace) -> HFSession:
         )
 
     tokenizer = load_tokenizer(resolved_model_id)
-    supports_images = is_vision_checkpoint(resolved_model_id)
+    supports_images = is_vision_checkpoint(resolved_model_id) and not bool(getattr(args, "hf_text_only", False))
     processor = None
     requested_template = (args.chat_template or "").strip()
     template_requested_value = requested_template
@@ -733,6 +898,10 @@ def create_session(args: argparse.Namespace) -> HFSession:
         "chat_template_applied": False,
         "chat_template_reason": "empty_default" if not requested_template else "ignored_prompt_mode",
     }
+    if is_vision_checkpoint(resolved_model_id) and bool(getattr(args, "hf_text_only", False)):
+        template_info["text_only_mode"] = True
+    else:
+        template_info["text_only_mode"] = False
     if supports_images:
         try:
             processor = AutoProcessor.from_pretrained(resolved_model_id)
@@ -770,23 +939,38 @@ def create_session(args: argparse.Namespace) -> HFSession:
 
     model_kwargs = {}
     input_device = device
+    explicit_device_map = (getattr(args, "hf_device_map", "") or "").strip()
+    parsed_max_memory = _parse_hf_max_memory(getattr(args, "hf_max_memory", ""))
+    explicit_low_cpu_mem_usage = getattr(args, "hf_low_cpu_mem_usage", None)
 
     if args.use_8bit or args.use_4bit:
         if device != "cuda":
             raise RuntimeError("4-bit/8-bit quantization requires CUDA.")
-        model_kwargs["device_map"] = "auto"
+        if BitsAndBytesConfig is None:
+            raise RuntimeError("BitsAndBytesConfig is unavailable in this transformers build.")
+        model_kwargs["device_map"] = explicit_device_map or "auto"
         model_kwargs["torch_dtype"] = dtype
+        if parsed_max_memory is not None:
+            model_kwargs["max_memory"] = parsed_max_memory
+        if explicit_low_cpu_mem_usage is not None:
+            model_kwargs["low_cpu_mem_usage"] = bool(explicit_low_cpu_mem_usage)
         if args.use_8bit:
-            model_kwargs["load_in_8bit"] = True
+            model_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
             print("Quantization: 8-bit")
         else:
-            model_kwargs["load_in_4bit"] = True
-            model_kwargs["bnb_4bit_compute_dtype"] = dtype
+            model_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=dtype,
+            )
             print("Quantization: 4-bit")
         input_device = "cuda"
     else:
         model_kwargs["torch_dtype"] = dtype
-        model_kwargs["device_map"] = "auto" if device == "cuda" else None
+        model_kwargs["device_map"] = explicit_device_map or ("auto" if device == "cuda" else None)
+        if parsed_max_memory is not None:
+            model_kwargs["max_memory"] = parsed_max_memory
+        if explicit_low_cpu_mem_usage is not None:
+            model_kwargs["low_cpu_mem_usage"] = bool(explicit_low_cpu_mem_usage)
     if args.hf_attn_implementation:
         model_kwargs["attn_implementation"] = args.hf_attn_implementation
         print(f"HF attention implementation override: {args.hf_attn_implementation}")
@@ -809,7 +993,7 @@ def create_session(args: argparse.Namespace) -> HFSession:
             raise RuntimeError(f"Failed to load vision model with installed transformers version: {detail}")
     else:
         model = AutoModelForCausalLM.from_pretrained(resolved_model_id, **model_kwargs)
-    if not (args.use_8bit or args.use_4bit):
+    if not (args.use_8bit or args.use_4bit) and not model_kwargs.get("device_map"):
         model.to(device)
     model.eval()
     return HFSession(

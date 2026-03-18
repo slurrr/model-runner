@@ -31,6 +31,16 @@ MAX_TOTAL_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_CAPTURE_BYTES = 256 * 1024
 
 
+def _safe_json_snippet(value: object, limit: int = 4096) -> str:
+    try:
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    except Exception:
+        text = str(value)
+    if len(text) <= limit:
+        return text
+    return text[: max(1, limit - len("...(truncated)"))] + "...(truncated)"
+
+
 def normalize_openai_base_url(base_url: str) -> str:
     raw = (base_url or "").strip().rstrip("/")
     if not raw:
@@ -74,17 +84,23 @@ def _sanitize_messages(messages: list[dict[str, object]]) -> list[dict[str, obje
         text: str | None
         if content_obj is None:
             text = None
+        elif isinstance(content_obj, list):
+            text = None
         else:
             text = content_obj if isinstance(content_obj, str) else str(content_obj)
         images_obj = msg.get("images")
         if not isinstance(images_obj, list) or not images_obj:
-            out: dict[str, object] = {"role": role, "content": text}
+            out_content = deepcopy(content_obj) if isinstance(content_obj, list) else text
+            out: dict[str, object] = {"role": role, "content": out_content}
             tool_calls = msg.get("tool_calls")
             if role == "assistant" and isinstance(tool_calls, list):
                 out["tool_calls"] = deepcopy(tool_calls)
             tool_call_id = msg.get("tool_call_id")
             if role == "tool" and isinstance(tool_call_id, str) and tool_call_id.strip():
                 out["tool_call_id"] = tool_call_id.strip()
+            tool_name = msg.get("name")
+            if role == "tool" and isinstance(tool_name, str) and tool_name.strip():
+                out["name"] = tool_name.strip()
             clean.append(out)
             continue
 
@@ -150,6 +166,227 @@ def _truncate_capture(data: dict) -> dict:
     keep_bytes = max(1024, MAX_CAPTURE_BYTES - len(marker.encode("utf-8")) - 64)
     trimmed = raw.encode("utf-8")[:keep_bytes].decode("utf-8", errors="ignore")
     return {"truncated": True, "max_bytes": MAX_CAPTURE_BYTES, "data": trimmed + marker}
+
+
+def _normalize_tool_choice(raw: object) -> object | None:
+    if raw in (None, "", False):
+        return None
+    if isinstance(raw, dict):
+        return deepcopy(raw)
+    if isinstance(raw, str):
+        value = raw.strip()
+        if not value:
+            return None
+        lowered = value.lower()
+        if lowered in {"auto", "none", "required"}:
+            return lowered
+        if value.startswith("{"):
+            parsed = json.loads(value)
+            if not isinstance(parsed, dict):
+                raise ValueError("tool_choice JSON must decode to an object")
+            return parsed
+        return {"type": "function", "function": {"name": value}}
+    raise ValueError("tool_choice must be empty, a string, or an object")
+
+
+def _parse_usage_counts(payload: object) -> dict[str, int]:
+    if not isinstance(payload, dict):
+        return {}
+    prompt_tokens = payload.get("prompt_tokens")
+    completion_tokens = payload.get("completion_tokens")
+    total_tokens = payload.get("total_tokens")
+    counts: dict[str, int] = {}
+    if isinstance(prompt_tokens, int):
+        counts["prompt_tokens"] = int(prompt_tokens)
+    if isinstance(completion_tokens, int):
+        counts["completion_tokens"] = int(completion_tokens)
+    if isinstance(total_tokens, int):
+        counts["total_tokens"] = int(total_tokens)
+    if "total_tokens" not in counts and "prompt_tokens" in counts and "completion_tokens" in counts:
+        counts["total_tokens"] = counts["prompt_tokens"] + counts["completion_tokens"]
+    return counts
+
+
+def _extract_server_error_text(payload: object, *, event_name: str | None = None) -> str | None:
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()
+            return _safe_json_snippet(error)
+        if event_name == "error":
+            message = payload.get("message")
+            if isinstance(message, str) and message.strip():
+                return message.strip()
+            return _safe_json_snippet(payload)
+    elif event_name == "error" and isinstance(payload, str) and payload.strip():
+        return payload.strip()
+    return None
+
+
+def _parse_nonstream_chat_response(frame: dict[str, object]) -> dict[str, object]:
+    usage_counts = _parse_usage_counts(frame.get("usage"))
+    choices = frame.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError("Non-stream chat completion response missing choices[0].")
+    choice0 = choices[0]
+    if not isinstance(choice0, dict):
+        raise RuntimeError("Non-stream chat completion response has invalid choices[0].")
+    finish_reason = choice0.get("finish_reason") if isinstance(choice0.get("finish_reason"), str) else None
+    message = choice0.get("message")
+    if not isinstance(message, dict):
+        raise RuntimeError("Non-stream chat completion response missing choices[0].message.")
+    content = message.get("content")
+    if content is None:
+        content_text = ""
+    elif isinstance(content, str):
+        content_text = content
+    else:
+        content_text = _safe_json_snippet(content)
+    tool_calls = message.get("tool_calls")
+    out_tool_calls: list[dict[str, object]] = []
+    if isinstance(tool_calls, list):
+        for index, item in enumerate(tool_calls):
+            if not isinstance(item, dict):
+                continue
+            fn = item.get("function") if isinstance(item.get("function"), dict) else {}
+            out_tool_calls.append(
+                {
+                    "index": index,
+                    "id": str(item.get("id") or ""),
+                    "type": str(item.get("type") or "function"),
+                    "name": str(fn.get("name") or ""),
+                    "arguments": str(fn.get("arguments") or ""),
+                }
+            )
+    return {
+        "content": content_text,
+        "tool_calls": out_tool_calls,
+        "finish_reason": finish_reason,
+        "usage": usage_counts,
+        "raw": frame,
+    }
+
+
+def _iter_sse_events(resp) -> object:
+    event_name = "message"
+    data_lines: list[str] = []
+    for raw_line in resp:
+        line = raw_line.decode("utf-8", errors="replace")
+        if line.endswith("\r\n"):
+            line = line[:-2]
+        elif line.endswith("\n"):
+            line = line[:-1]
+        elif line.endswith("\r"):
+            line = line[:-1]
+
+        if line == "":
+            if not data_lines:
+                event_name = "message"
+                continue
+            data_text = "\n".join(data_lines)
+            yield {"event": event_name, "data": data_text}
+            event_name = "message"
+            data_lines = []
+            continue
+        if line.startswith(":"):
+            continue
+        field, sep, value = line.partition(":")
+        if not sep:
+            continue
+        value = value[1:] if value.startswith(" ") else value
+        if field == "event":
+            event_name = value or "message"
+        elif field == "data":
+            data_lines.append(value)
+        else:
+            continue
+    if data_lines:
+        yield {"event": event_name, "data": "\n".join(data_lines)}
+
+
+def compat_chat_completion_request(
+    *,
+    base_url: str,
+    payload: dict[str, object],
+    timeout_s: float,
+    api_key: str = "",
+) -> dict[str, object]:
+    url = _join_url(normalize_openai_base_url(base_url), "/chat/completions")
+    stream = bool(payload.get("stream"))
+    if not stream:
+        with _json_request("POST", url, timeout=max(1.0, timeout_s), api_key=api_key, payload=payload) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+        frame = json.loads(raw)
+        err_text = _extract_server_error_text(frame)
+        if err_text:
+            raise RuntimeError(f"server error frame: {err_text}")
+        return {
+            "mode": "nonstream",
+            **_parse_nonstream_chat_response(frame),
+        }
+
+    events: list[dict[str, object]] = []
+    aggregated_tool_calls: dict[str, dict[str, object]] = {}
+    finish_reason: str | None = None
+    usage: dict[str, int] = {}
+    with _json_request("POST", url, timeout=max(1.0, timeout_s), api_key=api_key, payload=payload) as resp:
+        for event in _iter_sse_events(resp):
+            if not isinstance(event, dict):
+                continue
+            data_text = str(event.get("data") or "")
+            event_name = str(event.get("event") or "message")
+            if not data_text:
+                continue
+            if data_text.strip() == "[DONE]":
+                break
+            frame = json.loads(data_text)
+            err_text = _extract_server_error_text(frame, event_name=event_name)
+            if err_text:
+                raise RuntimeError(f"server error frame: {err_text}")
+            events.append(frame)
+            counts = _parse_usage_counts(frame.get("usage"))
+            if counts:
+                usage = counts
+            choices = frame.get("choices")
+            if not isinstance(choices, list) or not choices:
+                continue
+            choice0 = choices[0]
+            if not isinstance(choice0, dict):
+                continue
+            if isinstance(choice0.get("finish_reason"), str) and choice0.get("finish_reason"):
+                finish_reason = str(choice0["finish_reason"])
+            delta = choice0.get("delta")
+            if not isinstance(delta, dict):
+                continue
+            tcs = delta.get("tool_calls")
+            if isinstance(tcs, list):
+                for tc in tcs:
+                    if not isinstance(tc, dict):
+                        continue
+                    idx = str(tc.get("index", 0))
+                    rec = aggregated_tool_calls.setdefault(
+                        idx,
+                        {"index": tc.get("index", 0), "id": "", "type": "function", "name": "", "arguments": ""},
+                    )
+                    if isinstance(tc.get("id"), str) and tc["id"]:
+                        rec["id"] = tc["id"]
+                    if isinstance(tc.get("type"), str) and tc["type"]:
+                        rec["type"] = tc["type"]
+                    fn = tc.get("function")
+                    if isinstance(fn, dict):
+                        if isinstance(fn.get("name"), str) and fn["name"]:
+                            rec["name"] = fn["name"]
+                        if isinstance(fn.get("arguments"), str) and fn["arguments"]:
+                            rec["arguments"] = str(rec.get("arguments", "")) + fn["arguments"]
+    return {
+        "mode": "stream",
+        "finish_reason": finish_reason,
+        "usage": usage,
+        "events": events,
+        "tool_calls": [aggregated_tool_calls[key] for key in sorted(aggregated_tool_calls.keys(), key=int)],
+    }
 
 
 def _json_request(
@@ -243,6 +480,26 @@ class OpenAIHTTPSession:
             "timeout_s": self.timeout_s,
             **self.template_info,
         }
+
+    def _capture_request(self, *, url: str, payload: dict[str, object]) -> None:
+        if not getattr(self.args, "capture_last_request", False):
+            return
+        captured = {
+            "backend": self.backend_name,
+            "url": url,
+            "payload": _sanitize_for_capture(payload),
+            "api_key": "***" if self.api_key else "(unset)",
+        }
+        self._last_request = _truncate_capture(captured)
+
+    def _capture_response_snippet(self, *, key: str, value: object) -> None:
+        if not getattr(self.args, "capture_last_request", False):
+            return
+        if not isinstance(self._last_request, dict):
+            return
+        data = deepcopy(self._last_request)
+        data[key] = _sanitize_for_capture(value)
+        self._last_request = _truncate_capture(data)
 
     def _emit_ignored_knobs_once(self, emit: EventEmitter, turn_id: int) -> None:
         if self._ignored_knobs_once:
@@ -361,6 +618,9 @@ class OpenAIHTTPSession:
                 payload["seed"] = self.args.seed
             if include_tools:
                 payload["tools"] = tool_runtime.exposed_schema()
+                tool_choice = _normalize_tool_choice(getattr(self.args, "tools_tool_choice", ""))
+                if tool_choice is not None:
+                    payload["tool_choice"] = tool_choice
             if self.backend_name == "vllm":
                 payload["stream_options"] = {"include_usage": True}
                 if self.args.presence_penalty not in (None, 0.0):
@@ -438,136 +698,145 @@ class OpenAIHTTPSession:
 
             stage = "request_open"
             url = _join_url(self.base_url, "/chat/completions")
-            if getattr(self.args, "capture_last_request", False):
-                captured = {
-                    "backend": self.backend_name,
-                    "url": url,
-                    "payload": _sanitize_for_capture(payload),
-                    "api_key": "***" if self.api_key else "(unset)",
-                }
-                self._last_request = _truncate_capture(captured)
+            self._capture_request(url=url, payload=payload)
             req_timeout = max(1.0, self.timeout_s)
+
+            def _transport_error(detail: str, *, snippet: object | None = None) -> RuntimeError:
+                elapsed = max(0.0, time.time() - started)
+                message = (
+                    f"{self.backend_name} OpenAI-compatible request failed: {detail} "
+                    f"(url={url}, elapsed={elapsed:.2f}s)"
+                )
+                if snippet not in (None, "", {}):
+                    message += f" | last={_safe_json_snippet(snippet)}"
+                return RuntimeError(message)
+
             try:
                 with _json_request("POST", url, timeout=req_timeout, api_key=self.api_key, payload=payload) as resp:
                     stage = "stream_parse"
-                    buffer = ""
-                    for raw_line in resp:
+                    last_event_snippet: object | None = None
+                    for event in _iter_sse_events(resp):
                         if time.time() > deadline:
-                            raise RuntimeError(f"Request timed out after {self.timeout_s}s (total timeout).")
-                        line = raw_line.decode("utf-8", errors="replace")
-                        buffer += line
-                        while "\n" in buffer:
-                            current, buffer = buffer.split("\n", 1)
-                            current = current.strip()
-                            if not current or not current.startswith("data:"):
-                                continue
-                            data_part = current[5:].strip()
-                            if data_part == "[DONE]":
-                                buffer = ""
-                                raise StopIteration
+                            raise _transport_error(f"timeout after {self.timeout_s}s", snippet=last_event_snippet)
+                        if not isinstance(event, dict):
+                            continue
+                        data_part = str(event.get("data") or "")
+                        event_name = str(event.get("event") or "message")
+                        if not data_part:
+                            continue
+                        if data_part.strip() == "[DONE]":
+                            raise StopIteration
+                        try:
                             frame = json.loads(data_part)
-                            if isinstance(frame, dict) and isinstance(frame.get("error"), dict):
-                                err = frame["error"].get("message") or str(frame["error"])
-                                if not raw_parts and not think_parts and not answer_parts and is_context_overflow_text(err):
-                                    raise _ContextOverflow(str(err))
-                                raise RuntimeError(f"Server error frame: {err}")
+                            last_event_snippet = frame
+                            self._capture_response_snippet(key="response_event", value=frame)
+                        except Exception:
+                            last_event_snippet = {"event": event_name, "data": data_part}
+                            self._capture_response_snippet(key="response_event", value=last_event_snippet)
+                            err_text = _extract_server_error_text(data_part, event_name=event_name)
+                            if err_text:
+                                self._capture_response_snippet(key="response_error", value=last_event_snippet)
+                                if not raw_parts and not think_parts and not answer_parts and is_context_overflow_text(err_text):
+                                    raise _ContextOverflow(str(err_text))
+                                raise _transport_error(f"server error event: {err_text}", snippet=last_event_snippet)
+                            continue
 
-                            usage = frame.get("usage")
-                            if isinstance(usage, dict):
-                                prompt_tokens = usage.get("prompt_tokens")
-                                completion_tokens = usage.get("completion_tokens")
-                                total_tokens = usage.get("total_tokens")
-                                counts: dict[str, int] = {}
-                                if isinstance(prompt_tokens, int):
-                                    counts["prompt_tokens"] = int(prompt_tokens)
-                                if isinstance(completion_tokens, int):
-                                    counts["completion_tokens"] = int(completion_tokens)
-                                if isinstance(total_tokens, int):
-                                    counts["total_tokens"] = int(total_tokens)
-                                if "total_tokens" not in counts and "prompt_tokens" in counts and "completion_tokens" in counts:
-                                    counts["total_tokens"] = counts["prompt_tokens"] + counts["completion_tokens"]
-                                if counts:
-                                    usage_totals = counts
-                                    for key, value in counts.items():
-                                        emit(Meta(turn_id=turn_id, key=key, value=value))
+                        err_text = _extract_server_error_text(frame, event_name=event_name)
+                        if err_text:
+                            self._capture_response_snippet(key="response_error", value=frame)
+                            if not raw_parts and not think_parts and not answer_parts and is_context_overflow_text(err_text):
+                                raise _ContextOverflow(str(err_text))
+                            raise _transport_error(f"server error frame: {err_text}", snippet=frame)
 
-                            choices = frame.get("choices")
-                            if not isinstance(choices, list) or not choices:
-                                continue
-                            choice0 = choices[0]
-                            choice_finish_reason = choice0.get("finish_reason")
-                            if isinstance(choice_finish_reason, str) and choice_finish_reason:
-                                finish_reason = choice_finish_reason
-                            delta = choice0.get("delta") or {}
-                            if not isinstance(delta, dict):
-                                continue
+                        counts = _parse_usage_counts(frame.get("usage"))
+                        if counts:
+                            usage_totals = counts
+                            for key, value in counts.items():
+                                emit(Meta(turn_id=turn_id, key=key, value=value))
 
-                            reasoning = delta.get("reasoning")
-                            if not isinstance(reasoning, str):
-                                reasoning = delta.get("reasoning_content")
+                        choices = frame.get("choices")
+                        if not isinstance(choices, list) or not choices:
+                            continue
+                        choice0 = choices[0]
+                        if not isinstance(choice0, dict):
+                            continue
+                        choice_finish_reason = choice0.get("finish_reason")
+                        if isinstance(choice_finish_reason, str) and choice_finish_reason:
+                            finish_reason = choice_finish_reason
+                        delta = choice0.get("delta") or {}
+                        if not isinstance(delta, dict):
+                            continue
+
+                        reasoning = delta.get("reasoning")
+                        if not isinstance(reasoning, str):
+                            reasoning = delta.get("reasoning_content")
+                        if isinstance(reasoning, str) and reasoning:
+                            _emit_generated_text(reasoning)
+                            raw_parts.append(reasoning)
+                            _emit_think(reasoning)
+
+                        content = delta.get("content")
+                        if isinstance(content, str) and content:
+                            _emit_generated_text(content)
+                            raw_parts.append(content)
                             if isinstance(reasoning, str) and reasoning:
-                                _emit_generated_text(reasoning)
-                                raw_parts.append(reasoning)
-                                _emit_think(reasoning)
+                                answer_parts.append(content)
+                                emit(AnswerDelta(turn_id=turn_id, text=content))
+                            else:
+                                for channel, text in router.feed(content):
+                                    if channel == "think":
+                                        _emit_think(text)
+                                    else:
+                                        answer_parts.append(text)
+                                        emit(AnswerDelta(turn_id=turn_id, text=text))
 
-                            content = delta.get("content")
-                            if isinstance(content, str) and content:
-                                _emit_generated_text(content)
-                                raw_parts.append(content)
-                                if isinstance(reasoning, str) and reasoning:
-                                    answer_parts.append(content)
-                                    emit(AnswerDelta(turn_id=turn_id, text=content))
-                                else:
-                                    for channel, text in router.feed(content):
-                                        if channel == "think":
-                                            _emit_think(text)
-                                        else:
-                                            answer_parts.append(text)
-                                            emit(AnswerDelta(turn_id=turn_id, text=text))
-
-                            tcs = delta.get("tool_calls")
-                            if isinstance(tcs, list):
-                                for tc in tcs:
-                                    if not isinstance(tc, dict):
-                                        continue
-                                    idx = tc.get("index", 0)
-                                    idx_key = str(idx)
-                                    rec = tool_calls.setdefault(
-                                        idx_key,
-                                        {"index": idx, "id": "", "type": "function", "name": "", "arguments": ""},
-                                    )
-                                    tc_id = tc.get("id")
-                                    if isinstance(tc_id, str) and tc_id:
-                                        rec["id"] = tc_id
-                                    tc_type = tc.get("type")
-                                    if isinstance(tc_type, str) and tc_type:
-                                        rec["type"] = tc_type
-                                    fn = tc.get("function")
-                                    if isinstance(fn, dict):
-                                        name = fn.get("name")
-                                        if isinstance(name, str) and name:
-                                            rec["name"] = name
-                                        args_part = fn.get("arguments")
-                                        if isinstance(args_part, str) and args_part:
-                                            rec["arguments"] = str(rec.get("arguments", "")) + args_part
+                        tcs = delta.get("tool_calls")
+                        if isinstance(tcs, list):
+                            for tc in tcs:
+                                if not isinstance(tc, dict):
+                                    continue
+                                idx = tc.get("index", 0)
+                                idx_key = str(idx)
+                                rec = tool_calls.setdefault(
+                                    idx_key,
+                                    {"index": idx, "id": "", "type": "function", "name": "", "arguments": ""},
+                                )
+                                tc_id = tc.get("id")
+                                if isinstance(tc_id, str) and tc_id:
+                                    rec["id"] = tc_id
+                                tc_type = tc.get("type")
+                                if isinstance(tc_type, str) and tc_type:
+                                    rec["type"] = tc_type
+                                fn = tc.get("function")
+                                if isinstance(fn, dict):
+                                    name = fn.get("name")
+                                    if isinstance(name, str) and name:
+                                        rec["name"] = name
+                                    args_part = fn.get("arguments")
+                                    if isinstance(args_part, str) and args_part:
+                                        rec["arguments"] = str(rec.get("arguments", "")) + args_part
             except StopIteration:
                 pass
             except urllib.error.HTTPError as exc:
                 body = exc.read().decode("utf-8", errors="ignore").strip()
-                detail = f"OpenAI-compatible API request failed: HTTP {exc.code} {exc.reason}"
-                if body:
-                    detail += f" | body: {body}"
+                body_snippet = body[:4096] if body else ""
+                if body_snippet:
+                    self._capture_response_snippet(key="response_error", value={"http_status": exc.code, "body": body_snippet})
+                detail = f"HTTP {exc.code} {exc.reason}"
                 if not raw_parts and not think_parts and not answer_parts and is_context_overflow_text(detail):
                     raise _ContextOverflow(detail)
-                raise RuntimeError(detail) from exc
+                raise _transport_error(detail, snippet=body_snippet or None) from exc
             except urllib.error.URLError as exc:
-                raise RuntimeError(f"OpenAI-compatible API request failed: {exc}") from exc
+                raise _transport_error(str(exc)) from exc
             except _ContextOverflow:
                 raise
             except Exception as exc:
                 if not raw_parts and not think_parts and not answer_parts and is_context_overflow_text(str(exc)):
                     raise _ContextOverflow(str(exc)) from exc
-                raise RuntimeError(f"{stage}: {exc}") from exc
+                snippet = None
+                if isinstance(self._last_request, dict):
+                    snippet = self._last_request.get("response_error") or self._last_request.get("response_event")
+                raise _transport_error(f"{stage}: {exc}", snippet=snippet) from exc
 
             for channel, text in router.flush():
                 if channel == "think":
@@ -599,6 +868,14 @@ class OpenAIHTTPSession:
                             },
                         }
                     )
+            self._capture_response_snippet(
+                key="response_summary",
+                value={
+                    "finish_reason": finish_reason,
+                    "usage": usage_totals or {},
+                    "tool_calls": tool_calls_out,
+                },
+            )
             answer_text = "".join(answer_parts)
             assistant_message: dict[str, object] | None = None
             if assistant_tool_calls:

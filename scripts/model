@@ -14,6 +14,45 @@ TEMPLATE_DIR = MODELS_DIR / "_TEMPLATE"
 HF_CACHE_DIR = Path(os.path.expanduser("~/.cache/huggingface/hub"))
 
 
+def _looks_like_local_path(value: str) -> bool:
+    text = (value or "").strip()
+    if not text:
+        return False
+    expanded = os.path.expanduser(text)
+    if os.path.isabs(expanded):
+        return True
+    if text.startswith((".", "~")):
+        return True
+    if re.match(r"^[A-Za-z]:[\\/]", text):
+        return True
+    return False
+
+
+def _path_stem(value: str) -> str:
+    text = (value or "").strip().rstrip("/").rstrip("\\")
+    if not text:
+        return ""
+    return os.path.basename(os.path.expanduser(text))
+
+
+def _normalize_model_name(raw: str) -> str:
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    if _looks_like_local_path(text) or "/" in text or "\\" in text:
+        return _path_stem(text)
+    return text.rstrip("/").rstrip("\\")
+
+
+def _normalize_backend_id(backend: str, backend_id: str | None) -> str | None:
+    text = (backend_id or "").strip()
+    if not text:
+        return None
+    if _looks_like_local_path(text) or "/" in text or "\\" in text:
+        return _path_stem(text)
+    return text
+
+
 def _copy_tree(src: Path, dst: Path, *, overwrite: bool) -> list[Path]:
     copied: list[Path] = []
     for root, _dirs, files in os.walk(src):
@@ -168,10 +207,11 @@ def _resolve_model_card_source_without_id(model_name: str) -> Path | None:
 
 
 def cmd_add(args: argparse.Namespace) -> int:
-    model_name = args.model_name.strip().rstrip("/").rstrip("\\")
+    model_name = _normalize_model_name(args.model_name)
     if not model_name:
         print("model_name is required")
         return 2
+    config_model_id = _normalize_backend_id(args.backend, args.backend_id) or model_name
 
     backend = args.backend
     template_backend_dir = TEMPLATE_DIR / backend
@@ -222,10 +262,10 @@ def cmd_add(args: argparse.Namespace) -> int:
     # Light config population (optional; safe defaults).
     if backend == "ollama":
         cfg_toml = backend_dir / "config" / "default.toml"
-        _try_update_toml_model_id(cfg_toml, args.backend_id)
+        _try_update_toml_model_id(cfg_toml, config_model_id)
     elif backend in {"hf", "gguf", "exl2", "openai", "vllm"}:
         cfg_toml = backend_dir / "config" / "default.toml"
-        _try_update_toml_model_id(cfg_toml, args.backend_id)
+        _try_update_toml_model_id(cfg_toml, config_model_id)
 
     # Optional: import upstream model card into notes/ as model_card.md (HF only).
     # Auto-import if:

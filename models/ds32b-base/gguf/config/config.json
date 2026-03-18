@@ -1,6 +1,6 @@
 {
   "model_id": "ds32b-base",
-  "model_path": "/mnt/d/AI/Local Models/lmstudio-community/DeepSeek-R1-Distill-Qwen-32B-GGUF/DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf",
+  "model_path": "lmstudio-community/DeepSeek-R1-Distill-Qwen-32B-GGUF/DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf",
   "stream": true,
   "max_new_tokens": 2048,
   "seed": null,

@@ -39,13 +39,15 @@ def _flatten_toml_config(data: dict, *, backend: str) -> dict:
         if "display_name" in model:
             out["display_name"] = model.get("display_name")
 
-    for section in ("gen", "prompt", "ui", "tools"):
+    for section in ("gen", "prompt", "ui", "tools", "telemetry"):
         sec = data.get(section)
         if isinstance(sec, dict):
             for key, value in sec.items():
                 mapped = key
                 if section == "tools":
                     mapped = f"tools_{key}"
+                elif section == "telemetry":
+                    mapped = f"telemetry_{key}"
                 out[mapped] = value
 
     backend_root = data.get("backend")
@@ -65,6 +67,14 @@ def _flatten_toml_config(data: dict, *, backend: str) -> dict:
                     mapped = "hf_attn_implementation"
                 elif backend == "hf" and key == "log_file":
                     mapped = "hf_log_file"
+                elif backend == "hf" and key == "device_map":
+                    mapped = "hf_device_map"
+                elif backend == "hf" and key == "max_memory":
+                    mapped = "hf_max_memory"
+                elif backend == "hf" and key == "text_only":
+                    mapped = "hf_text_only"
+                elif backend == "hf" and key == "low_cpu_mem_usage":
+                    mapped = "hf_low_cpu_mem_usage"
                 elif backend == "gguf" and key == "log_file":
                     mapped = "gguf_log_file"
                 elif backend == "exl2" and key == "log_file":
@@ -111,6 +121,10 @@ def _flatten_toml_config(data: dict, *, backend: str) -> dict:
                         mapped = "vllm_attention_backend"
                     elif key == "dtype":
                         mapped = "vllm_dtype"
+                    elif key == "enable_auto_tool_choice":
+                        mapped = "vllm_enable_auto_tool_choice"
+                    elif key == "tool_call_parser":
+                        mapped = "vllm_tool_call_parser"
                     elif key == "log_file":
                         mapped = "vllm_log_file"
                 out[mapped] = value
@@ -171,10 +185,48 @@ def _apply_machine_overrides(data: dict, *, backend: str, machine_path: str) -> 
 
     out = dict(data)
     model_root = machine.get("model_root")
+    gguf_model_root = machine.get("gguf_model_root")
+    exl2_model_root = machine.get("exl2_model_root")
+    exl2_repo_path = machine.get("exl2_repo_path")
+
+    def _clean_str(value: object) -> str:
+        return value.strip() if isinstance(value, str) else ""
+
+    def _pathish_is_relative(value: str) -> bool:
+        if not value:
+            return False
+        expanded = os.path.expanduser(value)
+        if os.path.isabs(expanded):
+            return False
+        if re.match(r"^[A-Za-z]:[\\/]", value):
+            return False
+        return True
+
     if isinstance(model_root, str) and model_root.strip() and isinstance(out.get("model_id"), str):
         model_id = out["model_id"].strip()
         if _is_local_stem(model_id):
             out["model_id"] = os.path.join(os.path.expanduser(model_root), model_id)
+
+    if backend == "gguf":
+        gguf_root = _clean_str(gguf_model_root) or _clean_str(model_root)
+        raw_model_path = _clean_str(out.get("model_path"))
+        if gguf_root and _pathish_is_relative(raw_model_path):
+            out["model_path"] = os.path.join(os.path.expanduser(gguf_root), raw_model_path)
+
+    if backend == "exl2":
+        exl2_root = _clean_str(exl2_model_root) or _clean_str(model_root)
+        raw_model_path = _clean_str(out.get("model_path"))
+        raw_model_id = _clean_str(out.get("model_id"))
+        if exl2_root and not raw_model_path and _is_local_stem(raw_model_id):
+            out["model_path"] = os.path.expanduser(exl2_root)
+        elif exl2_root and _pathish_is_relative(raw_model_path):
+            out["model_path"] = os.path.join(os.path.expanduser(exl2_root), raw_model_path)
+
+        raw_repo_path = _clean_str(out.get("exl2_repo_path"))
+        if _clean_str(exl2_repo_path) and not raw_repo_path:
+            out["exl2_repo_path"] = _clean_str(exl2_repo_path)
+        elif _clean_str(exl2_repo_path) and _pathish_is_relative(raw_repo_path):
+            out["exl2_repo_path"] = os.path.join(os.path.expanduser(_clean_str(exl2_repo_path)), raw_repo_path)
 
     if backend == "ollama":
         ollama_host = machine.get("ollama_host")
@@ -289,6 +341,27 @@ def resolve_config_path(config_arg: str, backend: str = "hf") -> str | None:
             inside_json = os.path.join(normalized, "config.json")
             if os.path.isfile(inside_json):
                 return inside_json
+
+    # Allow the OpenAI-compatible attach path to reuse an existing managed-vLLM
+    # model config when there is no dedicated openai config folder.
+    if backend == "openai":
+        vllm_backend = "vllm"
+        vllm_candidates = []
+        vllm_candidates.append(os.path.join(root, "models", stem, vllm_backend, "config", "default.toml"))
+        vllm_candidates.append(os.path.join(root, "models", stem, vllm_backend, "config", "config.json"))
+        vllm_candidates.append(os.path.join(root, "models", stem, vllm_backend, "config"))
+        vllm_candidates.append(os.path.join(root, "models", stem, vllm_backend))
+        for path in vllm_candidates:
+            normalized = os.path.abspath(path)
+            if os.path.isfile(normalized):
+                return normalized
+            if os.path.isdir(normalized):
+                inside_toml = os.path.join(normalized, "default.toml")
+                if os.path.isfile(inside_toml):
+                    return inside_toml
+                inside_json = os.path.join(normalized, "config.json")
+                if os.path.isfile(inside_json):
+                    return inside_json
 
     return None
 
