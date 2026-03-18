@@ -1,5 +1,5 @@
 [model]
-id = "/home/poop/ml/models/Qwen3.5-9B"
+id = "Qwen3.5-9B"
 
 [gen]
 max_context_tokens = 49152
@@ -13,7 +13,7 @@ top_k = 20
 top_p = 0.95
 
 [prompt]
-chat_template = "~/ml/model-runner/models/Qwen3.5-9B/hf/templates/chat_template.jinja"
+chat_template = "models/Qwen3.5-9B/hf/templates/chat_template.jinja"
 prompt_mode = "chat"
 prompt_prefix = ""
 system = ""
@@ -35,6 +35,10 @@ strict_think_strip = false
 ui_max_events_per_tick = 64
 ui_tick_ms = 33
 
+[telemetry]
+jsonl = ""
+sample_interval_s = 1.0
+
 [tools]
 enabled = false
 mode = "dry_run"
@@ -46,12 +50,12 @@ timeout_s = 10
 max_result_chars = 8000
 
 [backend.hf]
-attn_implementation = "flash_attention_2"
+attn_implementation = "TORCH_SDPA"
 dtype = "bfloat16"
-device_map = "cuda:0"
-max_memory = "22.45GiB"
+device_map = ""
+max_memory = ""
 low_cpu_mem_usage = true
-text_only = true
+text_only = false
 use_4bit = false
 use_8bit = false
 log_file = ""

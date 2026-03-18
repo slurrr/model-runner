@@ -6209,3 +6209,1146 @@
 (EngineCore_DP0 pid=8663) ERROR 03-14 22:37:40 [core.py:1100]   File "/usr/lib/python3.11/subprocess.py", line 1955, in _execute_child
 (EngineCore_DP0 pid=8663) ERROR 03-14 22:37:40 [core.py:1100]     raise child_exception_type(errno_num, err_msg, err_filename)
 (EngineCore_DP0 pid=8663) ERROR 03-14 22:37:40 [core.py:1100] FileNotFoundError: [Errno 2] No such file or directory: 'ninja'
+(APIServer pid=11010) INFO 03-15 20:57:29 [utils.py:302] 
+(APIServer pid=11010) INFO 03-15 20:57:29 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=11010) INFO 03-15 20:57:29 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=11010) INFO 03-15 20:57:29 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=11010) INFO 03-15 20:57:29 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=11010) INFO 03-15 20:57:29 [utils.py:302] 
+(APIServer pid=11010) INFO 03-15 20:57:29 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'FLASHINFER', 'gpu_memory_utilization': 0.933, 'swap_space': 8.0, 'kv_cache_dtype': 'fp8_e5m2', 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=11010) INFO 03-15 20:57:29 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=11010) INFO 03-15 20:57:29 [model.py:1554] Using max model len 41984
+(APIServer pid=11010) INFO 03-15 20:57:29 [cache.py:223] Using fp8 data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor.
+(APIServer pid=11010) INFO 03-15 20:57:30 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=11010) INFO 03-15 20:57:30 [config.py:544] Setting attention block size to 1056 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=11010) INFO 03-15 20:57:30 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=11010) INFO 03-15 20:57:30 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=11010) WARNING 03-15 20:57:39 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=11325) INFO 03-15 20:57:42 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=fp8_e5m2, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=11325) WARNING 03-15 20:57:42 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=11325) INFO 03-15 20:57:44 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:37193 backend=nccl
+(EngineCore_DP0 pid=11325) INFO 03-15 20:57:54 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100] EngineCore failed to start.
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100] Traceback (most recent call last):
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1090, in run_engine_core
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 834, in __init__
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     super().__init__(
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 110, in __init__
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     self.model_executor = executor_class(vllm_config)
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 103, in __init__
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     self._init_executor()
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/uniproc_executor.py", line 48, in _init_executor
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     self.driver_worker.init_device()
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/worker_base.py", line 326, in init_device
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     self.worker.init_device()  # type: ignore
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 285, in init_device
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     self.requested_memory = request_memory(init_snapshot, self.cache_config)
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/utils.py", line 227, in request_memory
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100]     raise ValueError(
+(EngineCore_DP0 pid=11325) ERROR 03-15 20:57:54 [core.py:1100] ValueError: Free memory on device cuda:0 (22.2/23.99 GiB) on startup is less than desired GPU memory utilization (0.933, 22.38 GiB). Decrease GPU memory utilization or reduce GPU memory used by other processes.
+(APIServer pid=70281) INFO 03-16 14:02:33 [utils.py:302] 
+(APIServer pid=70281) INFO 03-16 14:02:33 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=70281) INFO 03-16 14:02:33 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=70281) INFO 03-16 14:02:33 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=70281) INFO 03-16 14:02:33 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=70281) INFO 03-16 14:02:33 [utils.py:302] 
+(APIServer pid=70281) INFO 03-16 14:02:33 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'xformers', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'kv_cache_dtype': 'fp8', 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=70281) INFO 03-16 14:02:33 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=70281) INFO 03-16 14:02:33 [model.py:1554] Using max model len 41984
+(APIServer pid=70281) INFO 03-16 14:02:33 [cache.py:223] Using fp8 data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor.
+(APIServer pid=70281) INFO 03-16 14:02:34 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=70867) INFO 03-16 14:03:05 [utils.py:302] 
+(APIServer pid=70867) INFO 03-16 14:03:05 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=70867) INFO 03-16 14:03:05 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=70867) INFO 03-16 14:03:05 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=70867) INFO 03-16 14:03:05 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=70867) INFO 03-16 14:03:05 [utils.py:302] 
+(APIServer pid=70867) INFO 03-16 14:03:05 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'TRITON_ATTN', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'kv_cache_dtype': 'fp8', 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=70867) INFO 03-16 14:03:05 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=70867) INFO 03-16 14:03:05 [model.py:1554] Using max model len 41984
+(APIServer pid=70867) INFO 03-16 14:03:05 [cache.py:223] Using fp8 data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor.
+(APIServer pid=70867) INFO 03-16 14:03:05 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=70867) INFO 03-16 14:03:06 [config.py:544] Setting attention block size to 1056 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=70867) INFO 03-16 14:03:06 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=70867) INFO 03-16 14:03:06 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=70867) WARNING 03-16 14:03:14 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=71108) INFO 03-16 14:03:18 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=fp8, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=71108) WARNING 03-16 14:03:18 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=71108) INFO 03-16 14:03:20 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:49277 backend=nccl
+(EngineCore_DP0 pid=71108) INFO 03-16 14:03:30 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=71108) INFO 03-16 14:03:36 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=71108) INFO 03-16 14:03:36 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=71108) INFO 03-16 14:03:37 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=71108) INFO 03-16 14:03:37 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=71108) INFO 03-16 14:03:37 [cuda.py:368] Using AttentionBackendEnum.TRITON_ATTN backend.
+(APIServer pid=74146) INFO 03-16 14:07:09 [utils.py:302] 
+(APIServer pid=74146) INFO 03-16 14:07:09 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=74146) INFO 03-16 14:07:09 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=74146) INFO 03-16 14:07:09 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=74146) INFO 03-16 14:07:09 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=74146) INFO 03-16 14:07:09 [utils.py:302] 
+(APIServer pid=74146) INFO 03-16 14:07:09 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'TORCH_SDPA', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'kv_cache_dtype': 'fp8', 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=74146) INFO 03-16 14:07:09 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=74146) INFO 03-16 14:07:09 [model.py:1554] Using max model len 41984
+(APIServer pid=74146) INFO 03-16 14:07:09 [cache.py:223] Using fp8 data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor.
+(APIServer pid=74146) INFO 03-16 14:07:09 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=74146) INFO 03-16 14:07:09 [config.py:544] Setting attention block size to 1056 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=74146) INFO 03-16 14:07:09 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=74146) INFO 03-16 14:07:09 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=74146) WARNING 03-16 14:07:18 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=74398) INFO 03-16 14:07:25 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=fp8, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=74398) WARNING 03-16 14:07:25 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=74398) INFO 03-16 14:07:27 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:56759 backend=nccl
+(EngineCore_DP0 pid=74398) INFO 03-16 14:07:37 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=74398) INFO 03-16 14:07:45 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=74398) INFO 03-16 14:07:45 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=74398) INFO 03-16 14:07:46 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=74398) INFO 03-16 14:07:46 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100] EngineCore failed to start.
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100] Traceback (most recent call last):
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1090, in run_engine_core
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 834, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     super().__init__(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 110, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.model_executor = executor_class(vllm_config)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 103, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self._init_executor()
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/uniproc_executor.py", line 49, in _init_executor
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.driver_worker.load_model()
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 337, in load_model
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.model_runner.load_model(load_dummy_weights=dummy_weights)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 4271, in load_model
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.model = model_loader.load_model(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/base_loader.py", line 54, in load_model
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     model = initialize_model(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]             ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/utils.py", line 56, in initialize_model
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     model = model_class(vllm_config=vllm_config, prefix=prefix)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 661, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.language_model = Qwen3_5ForCausalLM(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 553, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.model = Qwen3_5Model(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                  ^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/compilation/decorators.py", line 305, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     old_init(self, **kwargs)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 326, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.start_layer, self.end_layer, self.layers = make_layers(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                                                     ^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 637, in make_layers
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     + get_offloader().wrap_modules(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/offloader/base.py", line 90, in wrap_modules
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return list(modules_generator)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 638, in <genexpr>
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     layer_fn(prefix=f"{prefix}.{idx}") for idx in range(start_layer, end_layer)
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 320, in get_layer
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return Qwen3_5DecoderLayer(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 235, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.self_attn = Qwen3NextAttention(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                      ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_next.py", line 891, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.attn = Attention(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                 ^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/layers/attention/attention.py", line 274, in __init__
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     self.attn_backend = get_attn_backend(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                         ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 87, in get_attn_backend
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return _cached_get_attn_backend(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 102, in _cached_get_attn_backend
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     attention_cls = current_platform.get_attn_backend_cls(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/platforms/cuda.py", line 355, in get_attn_backend_cls
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     backend_class = selected_backend.get_class()
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 117, in get_class
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     return resolve_obj_by_qualname(self.get_path())
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]                                    ^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 99, in get_path
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100]     raise ValueError(
+(EngineCore_DP0 pid=74398) ERROR 03-16 14:07:46 [core.py:1100] ValueError: Backend TORCH_SDPA must be registered before use. Use register_backend(Backend.TORCH_SDPA, 'your.module.YourClass')
+(APIServer pid=96682) INFO 03-16 14:36:14 [utils.py:302] 
+(APIServer pid=96682) INFO 03-16 14:36:14 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=96682) INFO 03-16 14:36:14 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=96682) INFO 03-16 14:36:14 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=96682) INFO 03-16 14:36:14 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=96682) INFO 03-16 14:36:14 [utils.py:302] 
+(APIServer pid=96682) INFO 03-16 14:36:14 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'NO_ATTENTION', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'kv_cache_dtype': 'fp8', 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=96682) INFO 03-16 14:36:14 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=96682) INFO 03-16 14:36:14 [model.py:1554] Using max model len 41984
+(APIServer pid=96682) INFO 03-16 14:36:14 [cache.py:223] Using fp8 data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor.
+(APIServer pid=96682) INFO 03-16 14:36:14 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=96682) INFO 03-16 14:36:14 [config.py:544] Setting attention block size to 1056 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=96682) INFO 03-16 14:36:14 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=96682) INFO 03-16 14:36:14 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=96682) WARNING 03-16 14:36:25 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=96998) INFO 03-16 14:36:29 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=fp8, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=96998) WARNING 03-16 14:36:29 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=96998) INFO 03-16 14:36:31 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:38531 backend=nccl
+(EngineCore_DP0 pid=96998) INFO 03-16 14:36:41 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=96998) INFO 03-16 14:36:48 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=96998) INFO 03-16 14:36:48 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=96998) INFO 03-16 14:36:48 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=96998) INFO 03-16 14:36:48 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100] EngineCore failed to start.
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100] Traceback (most recent call last):
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1090, in run_engine_core
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 834, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     super().__init__(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 110, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.model_executor = executor_class(vllm_config)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 103, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self._init_executor()
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/uniproc_executor.py", line 49, in _init_executor
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.driver_worker.load_model()
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 337, in load_model
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.model_runner.load_model(load_dummy_weights=dummy_weights)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 4271, in load_model
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.model = model_loader.load_model(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/base_loader.py", line 54, in load_model
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     model = initialize_model(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]             ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/utils.py", line 56, in initialize_model
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     model = model_class(vllm_config=vllm_config, prefix=prefix)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 661, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.language_model = Qwen3_5ForCausalLM(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 553, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.model = Qwen3_5Model(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                  ^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/compilation/decorators.py", line 305, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     old_init(self, **kwargs)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 326, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.start_layer, self.end_layer, self.layers = make_layers(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                                                     ^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 637, in make_layers
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     + get_offloader().wrap_modules(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/offloader/base.py", line 90, in wrap_modules
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     return list(modules_generator)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 638, in <genexpr>
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     layer_fn(prefix=f"{prefix}.{idx}") for idx in range(start_layer, end_layer)
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 320, in get_layer
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     return Qwen3_5DecoderLayer(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 235, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.self_attn = Qwen3NextAttention(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                      ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_next.py", line 891, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.attn = Attention(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                 ^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/layers/attention/attention.py", line 274, in __init__
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     self.attn_backend = get_attn_backend(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                         ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 87, in get_attn_backend
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     return _cached_get_attn_backend(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 102, in _cached_get_attn_backend
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     attention_cls = current_platform.get_attn_backend_cls(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/platforms/cuda.py", line 363, in get_attn_backend_cls
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100]     raise ValueError(
+(EngineCore_DP0 pid=96998) ERROR 03-16 14:36:48 [core.py:1100] ValueError: Selected backend AttentionBackendEnum.NO_ATTENTION is not valid for this configuration. Reason: ['ImportError']
+(APIServer pid=96679) INFO 03-17 14:02:28 [utils.py:302] 
+(APIServer pid=96679) INFO 03-17 14:02:28 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=96679) INFO 03-17 14:02:28 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=96679) INFO 03-17 14:02:28 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=96679) INFO 03-17 14:02:28 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=96679) INFO 03-17 14:02:28 [utils.py:302] 
+(APIServer pid=96679) INFO 03-17 14:02:28 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'NO_ATTENTION', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'kv_cache_dtype': 'fp8', 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=96679) INFO 03-17 14:02:28 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=96679) INFO 03-17 14:02:28 [model.py:1554] Using max model len 41984
+(APIServer pid=96679) INFO 03-17 14:02:28 [cache.py:223] Using fp8 data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor.
+(APIServer pid=96679) INFO 03-17 14:02:28 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=96679) INFO 03-17 14:02:28 [config.py:544] Setting attention block size to 1056 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=96679) INFO 03-17 14:02:28 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=96679) INFO 03-17 14:02:28 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=96679) WARNING 03-17 14:02:38 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=96939) INFO 03-17 14:02:43 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=fp8, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=96939) WARNING 03-17 14:02:43 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=96939) INFO 03-17 14:02:45 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:39009 backend=nccl
+(EngineCore_DP0 pid=96939) INFO 03-17 14:02:55 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=96939) INFO 03-17 14:03:03 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=96939) INFO 03-17 14:03:03 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=96939) INFO 03-17 14:03:03 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=96939) INFO 03-17 14:03:03 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100] EngineCore failed to start.
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100] Traceback (most recent call last):
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1090, in run_engine_core
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 834, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     super().__init__(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 110, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.model_executor = executor_class(vllm_config)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 103, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self._init_executor()
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/uniproc_executor.py", line 49, in _init_executor
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.driver_worker.load_model()
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 337, in load_model
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.model_runner.load_model(load_dummy_weights=dummy_weights)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 4271, in load_model
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.model = model_loader.load_model(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/base_loader.py", line 54, in load_model
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     model = initialize_model(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]             ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/utils.py", line 56, in initialize_model
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     model = model_class(vllm_config=vllm_config, prefix=prefix)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 661, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.language_model = Qwen3_5ForCausalLM(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 553, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.model = Qwen3_5Model(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                  ^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/compilation/decorators.py", line 305, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     old_init(self, **kwargs)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 326, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.start_layer, self.end_layer, self.layers = make_layers(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                                                     ^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 637, in make_layers
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     + get_offloader().wrap_modules(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/offloader/base.py", line 90, in wrap_modules
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     return list(modules_generator)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 638, in <genexpr>
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     layer_fn(prefix=f"{prefix}.{idx}") for idx in range(start_layer, end_layer)
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 320, in get_layer
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     return Qwen3_5DecoderLayer(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 235, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.self_attn = Qwen3NextAttention(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                      ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_next.py", line 891, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.attn = Attention(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                 ^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/layers/attention/attention.py", line 274, in __init__
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     self.attn_backend = get_attn_backend(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                         ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 87, in get_attn_backend
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     return _cached_get_attn_backend(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 102, in _cached_get_attn_backend
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     attention_cls = current_platform.get_attn_backend_cls(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/platforms/cuda.py", line 363, in get_attn_backend_cls
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100]     raise ValueError(
+(EngineCore_DP0 pid=96939) ERROR 03-17 14:03:04 [core.py:1100] ValueError: Selected backend AttentionBackendEnum.NO_ATTENTION is not valid for this configuration. Reason: ['ImportError']
+(APIServer pid=98925) INFO 03-17 14:04:49 [utils.py:302] 
+(APIServer pid=98925) INFO 03-17 14:04:49 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=98925) INFO 03-17 14:04:49 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=98925) INFO 03-17 14:04:49 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=98925) INFO 03-17 14:04:49 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=98925) INFO 03-17 14:04:49 [utils.py:302] 
+(APIServer pid=98925) INFO 03-17 14:04:49 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'enforce_eager': True, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'spda', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=98925) INFO 03-17 14:04:49 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=98925) INFO 03-17 14:04:49 [model.py:1554] Using max model len 41984
+(APIServer pid=98925) INFO 03-17 14:04:49 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=913) INFO 03-17 14:06:30 [utils.py:302] 
+(APIServer pid=913) INFO 03-17 14:06:30 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=913) INFO 03-17 14:06:30 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=913) INFO 03-17 14:06:30 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=913) INFO 03-17 14:06:30 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=913) INFO 03-17 14:06:30 [utils.py:302] 
+(APIServer pid=913) INFO 03-17 14:06:30 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'enforce_eager': True, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'TORCH_SDPA', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=913) INFO 03-17 14:06:30 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=913) INFO 03-17 14:06:30 [model.py:1554] Using max model len 41984
+(APIServer pid=913) INFO 03-17 14:06:30 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=913) INFO 03-17 14:06:30 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=913) INFO 03-17 14:06:30 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=913) INFO 03-17 14:06:30 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=913) WARNING 03-17 14:06:30 [vllm.py:781] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=913) WARNING 03-17 14:06:30 [vllm.py:792] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=913) INFO 03-17 14:06:30 [vllm.py:957] Cudagraph is disabled under eager mode
+(APIServer pid=913) WARNING 03-17 14:06:40 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=1168) INFO 03-17 14:06:44 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=1168) WARNING 03-17 14:06:44 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=1168) INFO 03-17 14:06:45 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:47455 backend=nccl
+(EngineCore_DP0 pid=1168) INFO 03-17 14:06:55 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=1168) INFO 03-17 14:07:02 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=1168) INFO 03-17 14:07:02 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=1168) INFO 03-17 14:07:02 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=1168) INFO 03-17 14:07:02 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100] EngineCore failed to start.
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100] Traceback (most recent call last):
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1090, in run_engine_core
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 834, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     super().__init__(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 110, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.model_executor = executor_class(vllm_config)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 103, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self._init_executor()
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/uniproc_executor.py", line 49, in _init_executor
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.driver_worker.load_model()
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 337, in load_model
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.model_runner.load_model(load_dummy_weights=dummy_weights)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 4271, in load_model
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.model = model_loader.load_model(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/base_loader.py", line 54, in load_model
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     model = initialize_model(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]             ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/utils.py", line 56, in initialize_model
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     model = model_class(vllm_config=vllm_config, prefix=prefix)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 661, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.language_model = Qwen3_5ForCausalLM(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 553, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.model = Qwen3_5Model(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                  ^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/compilation/decorators.py", line 305, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     old_init(self, **kwargs)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 326, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.start_layer, self.end_layer, self.layers = make_layers(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                                                     ^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 637, in make_layers
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     + get_offloader().wrap_modules(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/offloader/base.py", line 90, in wrap_modules
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return list(modules_generator)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 638, in <genexpr>
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     layer_fn(prefix=f"{prefix}.{idx}") for idx in range(start_layer, end_layer)
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 320, in get_layer
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return Qwen3_5DecoderLayer(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 235, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.self_attn = Qwen3NextAttention(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                      ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_next.py", line 891, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.attn = Attention(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                 ^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/layers/attention/attention.py", line 274, in __init__
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     self.attn_backend = get_attn_backend(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                         ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 87, in get_attn_backend
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return _cached_get_attn_backend(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 102, in _cached_get_attn_backend
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     attention_cls = current_platform.get_attn_backend_cls(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/platforms/cuda.py", line 355, in get_attn_backend_cls
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     backend_class = selected_backend.get_class()
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 117, in get_class
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     return resolve_obj_by_qualname(self.get_path())
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]                                    ^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 99, in get_path
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100]     raise ValueError(
+(EngineCore_DP0 pid=1168) ERROR 03-17 14:07:03 [core.py:1100] ValueError: Backend TORCH_SDPA must be registered before use. Use register_backend(Backend.TORCH_SDPA, 'your.module.YourClass')
+(APIServer pid=6300) INFO 03-17 14:12:02 [utils.py:302] 
+(APIServer pid=6300) INFO 03-17 14:12:02 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=6300) INFO 03-17 14:12:02 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=6300) INFO 03-17 14:12:02 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=6300) INFO 03-17 14:12:02 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=6300) INFO 03-17 14:12:02 [utils.py:302] 
+(APIServer pid=6300) INFO 03-17 14:12:02 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'enforce_eager': True, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'FLASHINFER', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=6300) INFO 03-17 14:12:02 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=6300) INFO 03-17 14:12:02 [model.py:1554] Using max model len 41984
+(APIServer pid=6300) INFO 03-17 14:12:02 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=6300) INFO 03-17 14:12:02 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=6300) INFO 03-17 14:12:02 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=6300) INFO 03-17 14:12:02 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=6300) WARNING 03-17 14:12:02 [vllm.py:781] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=6300) WARNING 03-17 14:12:02 [vllm.py:792] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=6300) INFO 03-17 14:12:02 [vllm.py:957] Cudagraph is disabled under eager mode
+(APIServer pid=6300) WARNING 03-17 14:12:11 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=6567) INFO 03-17 14:12:15 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=6567) WARNING 03-17 14:12:15 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=6567) INFO 03-17 14:12:18 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:42851 backend=nccl
+(EngineCore_DP0 pid=6567) INFO 03-17 14:12:28 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=6567) INFO 03-17 14:12:35 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=6567) INFO 03-17 14:12:35 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=6567) INFO 03-17 14:12:35 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=6567) INFO 03-17 14:12:35 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=6567) INFO 03-17 14:12:36 [cuda.py:368] Using AttentionBackendEnum.FLASHINFER backend.
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:39 [default_loader.py:293] Loading weights took 62.38 seconds
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:39 [gpu_model_runner.py:4338] Model loading took 17.66 GiB memory and 63.373250 seconds
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:39 [gpu_model_runner.py:5254] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:48 [gpu_worker.py:424] Available KV cache memory: 2.61 GiB
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:48 [kv_cache_utils.py:1314] GPU KV cache size: 21,120 tokens
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:48 [kv_cache_utils.py:1319] Maximum concurrency for 41,984 tokens per request: 1.94x
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:48 [core.py:282] init engine (profile, create kv cache, warmup model) took 9.45 seconds
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:49 [vllm.py:747] Asynchronous scheduling is enabled.
+(EngineCore_DP0 pid=6567) WARNING 03-17 14:13:49 [vllm.py:781] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(EngineCore_DP0 pid=6567) WARNING 03-17 14:13:49 [vllm.py:792] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(EngineCore_DP0 pid=6567) INFO 03-17 14:13:49 [vllm.py:957] Cudagraph is disabled under eager mode
+(APIServer pid=6300) INFO 03-17 14:13:49 [api_server.py:495] Supported tasks: ['generate']
+(APIServer pid=6300) INFO 03-17 14:13:49 [logger.py:28] `--enable-log-requests` is set but the minimum log level is higher than DEBUG. Only limited information will be logged to minimize overhead. To view more details, set `VLLM_LOGGING_LEVEL=DEBUG`.
+(APIServer pid=6300) INFO 03-17 14:13:49 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=6300) INFO 03-17 14:13:49 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=6300) INFO 03-17 14:13:49 [serving.py:185] Warming up chat template processing...
+(APIServer pid=6300) INFO 03-17 14:13:49 [hf.py:318] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=6300) INFO 03-17 14:13:49 [serving.py:210] Chat template warmup completed in 42.3ms
+(APIServer pid=6300) INFO 03-17 14:13:49 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=6300) INFO 03-17 14:13:49 [api_server.py:500] Starting vLLM API server 0 on http://127.0.0.1:40223
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:38] Available routes are:
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /openapi.json, Methods: GET, HEAD
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /docs, Methods: GET, HEAD
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /redoc, Methods: GET, HEAD
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /tokenize, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /detokenize, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /load, Methods: GET
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /version, Methods: GET
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /health, Methods: GET
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /metrics, Methods: GET
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/models, Methods: GET
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /ping, Methods: GET
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /ping, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /invocations, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/chat/completions, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/chat/completions/render, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/responses, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/responses/{response_id}, Methods: GET
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/responses/{response_id}/cancel, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/completions, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/completions/render, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/messages, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /v1/messages/count_tokens, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /inference/v1/generate, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /scale_elastic_ep, Methods: POST
+(APIServer pid=6300) INFO 03-17 14:13:49 [launcher.py:47] Route: /is_scaling_elastic_ep, Methods: POST
+(APIServer pid=6300) INFO:     127.0.0.1:40726 - "GET /v1/models HTTP/1.1" 200 OK
+(APIServer pid=6300) INFO 03-17 14:15:21 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=6300) INFO 03-17 14:15:21 [logger.py:63] Received request chatcmpl-bbefe34f3d746b3f: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.03, temperature=0.6, top_p=0.9, top_k=64, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+(APIServer pid=6300) INFO:     127.0.0.1:57818 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(APIServer pid=6300) INFO 03-17 14:15:21 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=6300) INFO 03-17 14:15:21 [async_llm.py:421] Added request chatcmpl-bbefe34f3d746b3f-bf54b685.
+(APIServer pid=6300) INFO 03-17 14:15:49 [loggers.py:259] Engine 000: Avg prompt throughput: 42.9 tokens/s, Avg generation throughput: 7.7 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:15:59 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:16:35 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=6300) INFO 03-17 14:16:35 [logger.py:63] Received request chatcmpl-a0f441d76a01b94f: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.03, temperature=0.6, top_p=0.9, top_k=64, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+(APIServer pid=6300) INFO:     127.0.0.1:55396 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(APIServer pid=6300) INFO 03-17 14:16:35 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=6300) INFO 03-17 14:16:35 [async_llm.py:421] Added request chatcmpl-a0f441d76a01b94f-8419c046.
+(APIServer pid=6300) INFO 03-17 14:16:39 [loggers.py:259] Engine 000: Avg prompt throughput: 48.1 tokens/s, Avg generation throughput: 15.9 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:16:49 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:19:15 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=6300) INFO 03-17 14:19:15 [logger.py:63] Received request chatcmpl-9fe1bb8e6fa1b2e7: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.03, temperature=0.6, top_p=0.9, top_k=64, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+(APIServer pid=6300) INFO:     127.0.0.1:52630 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(APIServer pid=6300) INFO 03-17 14:19:15 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=6300) INFO 03-17 14:19:15 [async_llm.py:421] Added request chatcmpl-9fe1bb8e6fa1b2e7-97ef934b.
+(APIServer pid=6300) INFO 03-17 14:19:19 [loggers.py:259] Engine 000: Avg prompt throughput: 67.8 tokens/s, Avg generation throughput: 11.9 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 3.1%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:19:29 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 38.0 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 3.7%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:19:39 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 38.5 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 3.7%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:19:49 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 25.6 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:19:59 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=6300) INFO 03-17 14:34:19 [launcher.py:122] Shutting down FastAPI HTTP server.
+(APIServer pid=24457) INFO 03-17 14:34:45 [utils.py:302] 
+(APIServer pid=24457) INFO 03-17 14:34:45 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=24457) INFO 03-17 14:34:45 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=24457) INFO 03-17 14:34:45 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=24457) INFO 03-17 14:34:45 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=24457) INFO 03-17 14:34:45 [utils.py:302] 
+(APIServer pid=24457) INFO 03-17 14:34:45 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'enforce_eager': True, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'TORCH_SDPA', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=24457) INFO 03-17 14:34:45 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=24457) INFO 03-17 14:34:45 [model.py:1554] Using max model len 41984
+(APIServer pid=24457) INFO 03-17 14:34:46 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=24457) INFO 03-17 14:34:46 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=24457) INFO 03-17 14:34:46 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=24457) INFO 03-17 14:34:46 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=24457) WARNING 03-17 14:34:46 [vllm.py:781] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=24457) WARNING 03-17 14:34:46 [vllm.py:792] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=24457) INFO 03-17 14:34:46 [vllm.py:957] Cudagraph is disabled under eager mode
+(APIServer pid=24457) WARNING 03-17 14:34:56 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=24766) INFO 03-17 14:35:00 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=24766) WARNING 03-17 14:35:00 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=24766) INFO 03-17 14:35:02 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:47909 backend=nccl
+(EngineCore_DP0 pid=24766) INFO 03-17 14:35:12 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=24766) INFO 03-17 14:35:19 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=24766) INFO 03-17 14:35:19 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=24766) INFO 03-17 14:35:19 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=24766) INFO 03-17 14:35:19 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100] EngineCore failed to start.
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100] Traceback (most recent call last):
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1090, in run_engine_core
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 834, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     super().__init__(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 110, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.model_executor = executor_class(vllm_config)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 103, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self._init_executor()
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/uniproc_executor.py", line 49, in _init_executor
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.driver_worker.load_model()
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 337, in load_model
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.model_runner.load_model(load_dummy_weights=dummy_weights)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 4271, in load_model
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.model = model_loader.load_model(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/base_loader.py", line 54, in load_model
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     model = initialize_model(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]             ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/utils.py", line 56, in initialize_model
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     model = model_class(vllm_config=vllm_config, prefix=prefix)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 661, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.language_model = Qwen3_5ForCausalLM(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 553, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.model = Qwen3_5Model(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                  ^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/compilation/decorators.py", line 305, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     old_init(self, **kwargs)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 326, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.start_layer, self.end_layer, self.layers = make_layers(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                                                     ^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 637, in make_layers
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     + get_offloader().wrap_modules(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/offloader/base.py", line 90, in wrap_modules
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return list(modules_generator)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 638, in <genexpr>
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     layer_fn(prefix=f"{prefix}.{idx}") for idx in range(start_layer, end_layer)
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 320, in get_layer
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return Qwen3_5DecoderLayer(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 235, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.self_attn = Qwen3NextAttention(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                      ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_next.py", line 891, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.attn = Attention(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                 ^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/layers/attention/attention.py", line 274, in __init__
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     self.attn_backend = get_attn_backend(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                         ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 87, in get_attn_backend
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return _cached_get_attn_backend(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 102, in _cached_get_attn_backend
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     attention_cls = current_platform.get_attn_backend_cls(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/platforms/cuda.py", line 355, in get_attn_backend_cls
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     backend_class = selected_backend.get_class()
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 117, in get_class
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     return resolve_obj_by_qualname(self.get_path())
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]                                    ^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 99, in get_path
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100]     raise ValueError(
+(EngineCore_DP0 pid=24766) ERROR 03-17 14:35:19 [core.py:1100] ValueError: Backend TORCH_SDPA must be registered before use. Use register_backend(Backend.TORCH_SDPA, 'your.module.YourClass')
+(APIServer pid=26798) INFO 03-17 14:36:54 [utils.py:302] 
+(APIServer pid=26798) INFO 03-17 14:36:54 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=26798) INFO 03-17 14:36:54 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=26798) INFO 03-17 14:36:54 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=26798) INFO 03-17 14:36:54 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=26798) INFO 03-17 14:36:54 [utils.py:302] 
+(APIServer pid=26798) INFO 03-17 14:36:54 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 41984, 'enforce_eager': True, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'TORCH_SDPA', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=26798) INFO 03-17 14:36:54 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=26798) INFO 03-17 14:36:54 [model.py:1554] Using max model len 41984
+(APIServer pid=26798) INFO 03-17 14:36:54 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=26798) INFO 03-17 14:36:54 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=26798) INFO 03-17 14:36:54 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=26798) INFO 03-17 14:36:54 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=26798) WARNING 03-17 14:36:54 [vllm.py:781] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=26798) WARNING 03-17 14:36:54 [vllm.py:792] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=26798) INFO 03-17 14:36:54 [vllm.py:957] Cudagraph is disabled under eager mode
+(APIServer pid=26798) WARNING 03-17 14:37:03 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=27042) INFO 03-17 14:37:07 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=41984, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=27042) WARNING 03-17 14:37:07 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=27042) INFO 03-17 14:37:08 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:36083 backend=nccl
+(EngineCore_DP0 pid=27042) INFO 03-17 14:37:18 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=27042) INFO 03-17 14:37:25 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=27042) INFO 03-17 14:37:25 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=27042) INFO 03-17 14:37:25 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=27042) INFO 03-17 14:37:25 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100] EngineCore failed to start.
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100] Traceback (most recent call last):
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1090, in run_engine_core
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 834, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     super().__init__(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 110, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.model_executor = executor_class(vllm_config)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 103, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self._init_executor()
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/uniproc_executor.py", line 49, in _init_executor
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.driver_worker.load_model()
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 337, in load_model
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.model_runner.load_model(load_dummy_weights=dummy_weights)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 4271, in load_model
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.model = model_loader.load_model(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/base_loader.py", line 54, in load_model
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     model = initialize_model(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]             ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/utils.py", line 56, in initialize_model
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     model = model_class(vllm_config=vllm_config, prefix=prefix)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 661, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.language_model = Qwen3_5ForCausalLM(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 553, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.model = Qwen3_5Model(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                  ^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/compilation/decorators.py", line 305, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     old_init(self, **kwargs)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 326, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.start_layer, self.end_layer, self.layers = make_layers(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                                                     ^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 637, in make_layers
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     + get_offloader().wrap_modules(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/offloader/base.py", line 90, in wrap_modules
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return list(modules_generator)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 638, in <genexpr>
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     layer_fn(prefix=f"{prefix}.{idx}") for idx in range(start_layer, end_layer)
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 320, in get_layer
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return Qwen3_5DecoderLayer(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 235, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.self_attn = Qwen3NextAttention(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                      ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_next.py", line 891, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.attn = Attention(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                 ^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/layers/attention/attention.py", line 274, in __init__
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     self.attn_backend = get_attn_backend(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                         ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 87, in get_attn_backend
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return _cached_get_attn_backend(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 102, in _cached_get_attn_backend
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     attention_cls = current_platform.get_attn_backend_cls(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/platforms/cuda.py", line 355, in get_attn_backend_cls
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     backend_class = selected_backend.get_class()
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 117, in get_class
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     return resolve_obj_by_qualname(self.get_path())
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]                                    ^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 99, in get_path
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100]     raise ValueError(
+(EngineCore_DP0 pid=27042) ERROR 03-17 14:37:26 [core.py:1100] ValueError: Backend TORCH_SDPA must be registered before use. Use register_backend(Backend.TORCH_SDPA, 'your.module.YourClass')
+(APIServer pid=29520) INFO 03-17 14:39:47 [utils.py:302] 
+(APIServer pid=29520) INFO 03-17 14:39:47 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=29520) INFO 03-17 14:39:47 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=29520) INFO 03-17 14:39:47 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=29520) INFO 03-17 14:39:47 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=29520) INFO 03-17 14:39:47 [utils.py:302] 
+(APIServer pid=29520) INFO 03-17 14:39:47 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 21120, 'enforce_eager': True, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'TORCH_SDPA', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=29520) INFO 03-17 14:39:47 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=29520) INFO 03-17 14:39:47 [model.py:1554] Using max model len 21120
+(APIServer pid=29520) INFO 03-17 14:39:47 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=29520) INFO 03-17 14:39:48 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=29520) INFO 03-17 14:39:48 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=29520) INFO 03-17 14:39:48 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=29520) WARNING 03-17 14:39:48 [vllm.py:781] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=29520) WARNING 03-17 14:39:48 [vllm.py:792] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=29520) INFO 03-17 14:39:48 [vllm.py:957] Cudagraph is disabled under eager mode
+(APIServer pid=29520) WARNING 03-17 14:39:56 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=29763) INFO 03-17 14:40:00 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=21120, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=29763) WARNING 03-17 14:40:00 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=29763) INFO 03-17 14:40:01 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:49317 backend=nccl
+(EngineCore_DP0 pid=29763) INFO 03-17 14:40:12 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=29763) INFO 03-17 14:40:18 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=29763) INFO 03-17 14:40:18 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=29763) INFO 03-17 14:40:18 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=29763) INFO 03-17 14:40:18 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100] EngineCore failed to start.
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100] Traceback (most recent call last):
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 1090, in run_engine_core
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     engine_core = EngineCoreProc(*args, engine_index=dp_rank, **kwargs)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 834, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     super().__init__(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/engine/core.py", line 110, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.model_executor = executor_class(vllm_config)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/abstract.py", line 103, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self._init_executor()
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/executor/uniproc_executor.py", line 49, in _init_executor
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.driver_worker.load_model()
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_worker.py", line 337, in load_model
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.model_runner.load_model(load_dummy_weights=dummy_weights)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/worker/gpu_model_runner.py", line 4271, in load_model
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.model = model_loader.load_model(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                  ^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/base_loader.py", line 54, in load_model
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     model = initialize_model(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]             ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/tracing/otel.py", line 178, in sync_wrapper
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return func(*args, **kwargs)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/model_loader/utils.py", line 56, in initialize_model
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     model = model_class(vllm_config=vllm_config, prefix=prefix)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 661, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.language_model = Qwen3_5ForCausalLM(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                           ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 553, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.model = Qwen3_5Model(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                  ^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/compilation/decorators.py", line 305, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     old_init(self, **kwargs)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 326, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.start_layer, self.end_layer, self.layers = make_layers(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                                                     ^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 637, in make_layers
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     + get_offloader().wrap_modules(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/offloader/base.py", line 90, in wrap_modules
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return list(modules_generator)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/utils.py", line 638, in <genexpr>
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     layer_fn(prefix=f"{prefix}.{idx}") for idx in range(start_layer, end_layer)
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 320, in get_layer
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return Qwen3_5DecoderLayer(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_5.py", line 235, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.self_attn = Qwen3NextAttention(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                      ^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/models/qwen3_next.py", line 891, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.attn = Attention(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                 ^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/model_executor/layers/attention/attention.py", line 274, in __init__
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     self.attn_backend = get_attn_backend(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                         ^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 87, in get_attn_backend
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return _cached_get_attn_backend(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]            ^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/selector.py", line 102, in _cached_get_attn_backend
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     attention_cls = current_platform.get_attn_backend_cls(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/platforms/cuda.py", line 355, in get_attn_backend_cls
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     backend_class = selected_backend.get_class()
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 117, in get_class
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     return resolve_obj_by_qualname(self.get_path())
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]                                    ^^^^^^^^^^^^^^^
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]   File "/home/poop/ml/model-runner/.venv/lib/python3.11/site-packages/vllm/v1/attention/backends/registry.py", line 99, in get_path
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100]     raise ValueError(
+(EngineCore_DP0 pid=29763) ERROR 03-17 14:40:19 [core.py:1100] ValueError: Backend TORCH_SDPA must be registered before use. Use register_backend(Backend.TORCH_SDPA, 'your.module.YourClass')
+(APIServer pid=36880) INFO 03-17 14:48:03 [utils.py:302] 
+(APIServer pid=36880) INFO 03-17 14:48:03 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=36880) INFO 03-17 14:48:03 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=36880) INFO 03-17 14:48:03 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=36880) INFO 03-17 14:48:03 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=36880) INFO 03-17 14:48:03 [utils.py:302] 
+(APIServer pid=36880) INFO 03-17 14:48:03 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 21120, 'enforce_eager': True, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=36880) INFO 03-17 14:48:03 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=36880) INFO 03-17 14:48:03 [model.py:1554] Using max model len 21120
+(APIServer pid=36880) INFO 03-17 14:48:03 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=36880) INFO 03-17 14:48:03 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=36880) INFO 03-17 14:48:03 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=36880) INFO 03-17 14:48:03 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=36880) WARNING 03-17 14:48:03 [vllm.py:781] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(APIServer pid=36880) WARNING 03-17 14:48:03 [vllm.py:792] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(APIServer pid=36880) INFO 03-17 14:48:03 [vllm.py:957] Cudagraph is disabled under eager mode
+(APIServer pid=36880) WARNING 03-17 14:48:12 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:16 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=21120, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.NONE: 0>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['all'], 'splitting_ops': [], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.NONE: 0>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 0, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=37137) WARNING 03-17 14:48:16 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:18 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:60189 backend=nccl
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:28 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:34 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:34 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:34 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:34 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:35 [cuda.py:405] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+(EngineCore_DP0 pid=37137) INFO 03-17 14:48:35 [flash_attn.py:587] Using FlashAttention version 2
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:36 [default_loader.py:293] Loading weights took 61.49 seconds
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:37 [gpu_model_runner.py:4338] Model loading took 17.66 GiB memory and 62.359132 seconds
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:37 [gpu_model_runner.py:5254] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:46 [gpu_worker.py:424] Available KV cache memory: 2.61 GiB
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:46 [kv_cache_utils.py:1314] GPU KV cache size: 21,120 tokens
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:46 [kv_cache_utils.py:1319] Maximum concurrency for 21,120 tokens per request: 3.74x
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:46 [core.py:282] init engine (profile, create kv cache, warmup model) took 9.58 seconds
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:47 [vllm.py:747] Asynchronous scheduling is enabled.
+(EngineCore_DP0 pid=37137) WARNING 03-17 14:49:47 [vllm.py:781] Enforce eager set, disabling torch.compile and CUDAGraphs. This is equivalent to setting -cc.mode=none -cc.cudagraph_mode=none
+(EngineCore_DP0 pid=37137) WARNING 03-17 14:49:47 [vllm.py:792] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(EngineCore_DP0 pid=37137) INFO 03-17 14:49:47 [vllm.py:957] Cudagraph is disabled under eager mode
+(APIServer pid=36880) INFO 03-17 14:49:47 [api_server.py:495] Supported tasks: ['generate']
+(APIServer pid=36880) INFO 03-17 14:49:47 [logger.py:28] `--enable-log-requests` is set but the minimum log level is higher than DEBUG. Only limited information will be logged to minimize overhead. To view more details, set `VLLM_LOGGING_LEVEL=DEBUG`.
+(APIServer pid=36880) INFO 03-17 14:49:47 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=36880) INFO 03-17 14:49:47 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=36880) INFO 03-17 14:49:47 [serving.py:185] Warming up chat template processing...
+(APIServer pid=36880) INFO 03-17 14:49:47 [hf.py:318] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=36880) INFO 03-17 14:49:47 [serving.py:210] Chat template warmup completed in 41.6ms
+(APIServer pid=36880) INFO 03-17 14:49:47 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=36880) INFO 03-17 14:49:47 [api_server.py:500] Starting vLLM API server 0 on http://127.0.0.1:40223
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:38] Available routes are:
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /openapi.json, Methods: GET, HEAD
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /docs, Methods: GET, HEAD
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /redoc, Methods: GET, HEAD
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /tokenize, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /detokenize, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /load, Methods: GET
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /version, Methods: GET
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /health, Methods: GET
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /metrics, Methods: GET
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/models, Methods: GET
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /ping, Methods: GET
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /ping, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /invocations, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/chat/completions, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/chat/completions/render, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/responses, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/responses/{response_id}, Methods: GET
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/responses/{response_id}/cancel, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/completions, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/completions/render, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/messages, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /v1/messages/count_tokens, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /inference/v1/generate, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /scale_elastic_ep, Methods: POST
+(APIServer pid=36880) INFO 03-17 14:49:47 [launcher.py:47] Route: /is_scaling_elastic_ep, Methods: POST
+(APIServer pid=36880) INFO:     127.0.0.1:43894 - "GET /v1/models HTTP/1.1" 200 OK
+(APIServer pid=36880) INFO 03-17 14:50:13 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=36880) INFO 03-17 14:50:13 [logger.py:63] Received request chatcmpl-a4c17ae05465b619: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.03, temperature=0.6, top_p=0.9, top_k=64, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+(APIServer pid=36880) INFO:     127.0.0.1:35070 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(APIServer pid=36880) INFO 03-17 14:50:13 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=36880) INFO 03-17 14:50:13 [async_llm.py:421] Added request chatcmpl-a4c17ae05465b619-937e82e9.
+(APIServer pid=36880) INFO 03-17 14:50:27 [loggers.py:259] Engine 000: Avg prompt throughput: 42.4 tokens/s, Avg generation throughput: 4.6 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=36880) INFO 03-17 14:50:37 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=36880) INFO 03-17 14:50:39 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=36880) INFO 03-17 14:50:39 [logger.py:63] Received request chatcmpl-b9205fcb7207cff8: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.03, temperature=0.6, top_p=0.9, top_k=64, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+(APIServer pid=36880) INFO:     127.0.0.1:53216 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(APIServer pid=36880) INFO 03-17 14:50:39 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=36880) INFO 03-17 14:50:39 [async_llm.py:421] Added request chatcmpl-b9205fcb7207cff8-a93a5e02.
+(APIServer pid=36880) INFO 03-17 14:50:47 [loggers.py:259] Engine 000: Avg prompt throughput: 45.2 tokens/s, Avg generation throughput: 15.6 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=36880) INFO 03-17 14:50:57 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=36880) INFO 03-17 14:51:43 [launcher.py:122] Shutting down FastAPI HTTP server.
+(APIServer pid=40689) INFO 03-17 14:52:06 [utils.py:302] 
+(APIServer pid=40689) INFO 03-17 14:52:06 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=40689) INFO 03-17 14:52:06 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+(APIServer pid=40689) INFO 03-17 14:52:06 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+(APIServer pid=40689) INFO 03-17 14:52:06 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=40689) INFO 03-17 14:52:06 [utils.py:302] 
+(APIServer pid=40689) INFO 03-17 14:52:06 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'chat_template': 'models/Qwen3.5-9B/hf/templates/chat_template.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40223, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 21120, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'gpu_memory_utilization': 0.933, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+(APIServer pid=40689) INFO 03-17 14:52:06 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=40689) INFO 03-17 14:52:06 [model.py:1554] Using max model len 21120
+(APIServer pid=40689) INFO 03-17 14:52:06 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+(APIServer pid=40689) INFO 03-17 14:52:06 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=40689) INFO 03-17 14:52:06 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=40689) INFO 03-17 14:52:06 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=40689) WARNING 03-17 14:52:15 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:19 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=21120, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP0 pid=40994) WARNING 03-17 14:52:19 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:21 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:50235 backend=nccl
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:31 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:37 [base.py:106] Offloader set to NoopOffloader
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:37 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:37 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:37 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:38 [cuda.py:405] Using FLASH_ATTN attention backend out of potential backends: ['FLASH_ATTN', 'FLASHINFER', 'TRITON_ATTN', 'FLEX_ATTENTION'].
+(EngineCore_DP0 pid=40994) INFO 03-17 14:52:38 [flash_attn.py:587] Using FlashAttention version 2
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:02 [default_loader.py:293] Loading weights took 23.43 seconds
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:02 [gpu_model_runner.py:4338] Model loading took 17.66 GiB memory and 24.189835 seconds
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:02 [gpu_model_runner.py:5254] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:13 [backends.py:916] Using cache directory: /home/poop/.cache/vllm/torch_compile_cache/960cb9848e/rank_0_0/backbone for vLLM's torch.compile
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:13 [backends.py:976] Dynamo bytecode transform time: 4.46 s
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:14 [backends.py:350] Cache the graph of compile range (1, 2048) for later use
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:15 [backends.py:366] Compiling a graph for compile range (1, 2048) takes 1.21 s
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:15 [monitor.py:35] torch.compile takes 6.47 s in total
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:15 [decorators.py:580] saving AOT compiled function to /home/poop/.cache/vllm/torch_compile_cache/torch_aot_compile/1afe16d16f4d266515a6b0012987556fe8221d89ddaebc09b4613371117b088f/rank_0_0/model
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:15 [decorators.py:588] saved AOT compiled function to /home/poop/.cache/vllm/torch_compile_cache/torch_aot_compile/1afe16d16f4d266515a6b0012987556fe8221d89ddaebc09b4613371117b088f/rank_0_0/model
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:16 [gpu_worker.py:424] Available KV cache memory: 2.61 GiB
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:16 [kv_cache_utils.py:1314] GPU KV cache size: 21,120 tokens
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:16 [kv_cache_utils.py:1319] Maximum concurrency for 21,120 tokens per request: 3.74x
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:16 [gpu_model_runner.py:5360] Graph capturing finished in 1 secs, took 0.04 GiB
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:16 [core.py:282] init engine (profile, create kv cache, warmup model) took 14.51 seconds
+(EngineCore_DP0 pid=40994) INFO 03-17 14:53:17 [vllm.py:747] Asynchronous scheduling is enabled.
+(APIServer pid=40689) INFO 03-17 14:53:17 [api_server.py:495] Supported tasks: ['generate']
+(APIServer pid=40689) INFO 03-17 14:53:17 [logger.py:28] `--enable-log-requests` is set but the minimum log level is higher than DEBUG. Only limited information will be logged to minimize overhead. To view more details, set `VLLM_LOGGING_LEVEL=DEBUG`.
+(APIServer pid=40689) INFO 03-17 14:53:17 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=40689) INFO 03-17 14:53:17 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=40689) INFO 03-17 14:53:17 [serving.py:185] Warming up chat template processing...
+(APIServer pid=40689) INFO 03-17 14:53:17 [hf.py:318] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=40689) INFO 03-17 14:53:17 [serving.py:210] Chat template warmup completed in 40.8ms
+(APIServer pid=40689) INFO 03-17 14:53:17 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=40689) INFO 03-17 14:53:17 [api_server.py:500] Starting vLLM API server 0 on http://127.0.0.1:40223
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:38] Available routes are:
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /openapi.json, Methods: HEAD, GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /docs, Methods: HEAD, GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /docs/oauth2-redirect, Methods: HEAD, GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /redoc, Methods: HEAD, GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /tokenize, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /detokenize, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /load, Methods: GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /version, Methods: GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /health, Methods: GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /metrics, Methods: GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/models, Methods: GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /ping, Methods: GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /ping, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /invocations, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/chat/completions, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/chat/completions/render, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/responses, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/responses/{response_id}, Methods: GET
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/responses/{response_id}/cancel, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/completions, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/completions/render, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/messages, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /v1/messages/count_tokens, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /inference/v1/generate, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /scale_elastic_ep, Methods: POST
+(APIServer pid=40689) INFO 03-17 14:53:17 [launcher.py:47] Route: /is_scaling_elastic_ep, Methods: POST
+(APIServer pid=40689) INFO:     127.0.0.1:36756 - "GET /v1/models HTTP/1.1" 200 OK
+(APIServer pid=40689) INFO 03-17 14:54:03 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=40689) INFO 03-17 14:54:03 [logger.py:63] Received request chatcmpl-9a1bd7031653dbfa: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.03, temperature=0.6, top_p=0.9, top_k=64, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+(APIServer pid=40689) INFO:     127.0.0.1:58486 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(APIServer pid=40689) INFO 03-17 14:54:03 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=40689) INFO 03-17 14:54:03 [async_llm.py:421] Added request chatcmpl-9a1bd7031653dbfa-80ce0afd.
+(APIServer pid=40689) INFO 03-17 14:54:17 [loggers.py:259] Engine 000: Avg prompt throughput: 42.4 tokens/s, Avg generation throughput: 4.6 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=40689) INFO 03-17 14:54:27 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=40689) INFO 03-17 14:54:29 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=40689) INFO 03-17 14:54:29 [logger.py:63] Received request chatcmpl-8bfe3e523ac5e39e: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.03, temperature=0.6, top_p=0.9, top_k=64, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+(APIServer pid=40689) INFO:     127.0.0.1:45300 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+(APIServer pid=40689) INFO 03-17 14:54:29 [qwen3xml_tool_parser.py:1178] vLLM Successfully import tool parser Qwen3XMLToolParser !
+(APIServer pid=40689) INFO 03-17 14:54:29 [async_llm.py:421] Added request chatcmpl-8bfe3e523ac5e39e-b96b988b.
+(APIServer pid=40689) INFO 03-17 14:54:37 [loggers.py:259] Engine 000: Avg prompt throughput: 44.6 tokens/s, Avg generation throughput: 20.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=40689) INFO 03-17 14:54:47 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=40689) INFO 03-18 10:18:14 [launcher.py:122] Shutting down FastAPI HTTP server.

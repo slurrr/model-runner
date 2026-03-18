@@ -23,4 +23,5 @@ Implementation specs for features we plan to add (kept lightweight and pragmatic
 - `docs/specs/0019-chat-template-and-history-control.md`: Best-effort repo-wide chat template control + think-stripping for history.
 - `docs/specs/0020-tui-mvp-tool-execution-harness.md`: Minimal, safe tool execution loop in the TUI (vLLM/OpenAI first).
 - `docs/specs/0021-safe-browser-tool-v1.md`: Fetch-only browser tool with SSRF + injection guardrails.
-- `docs/specs/0023-local-observability-dashboard.md`: Repo-owned local observability product with a web dashboard, canonical telemetry model, and future same-surface web chat path.
+- `docs/specs/0022-openclaw-openai-compat-optimization-pass.md`: OpenClaw / OpenAI Compatibility Optimization Pass.
+- `docs/specs/0023-telemetry-mvp-schema-publisher-and-export.md`: Repo-scoped telemetry MVP covering canonical schema, publisher interface, baseline events, and optional JSON/Prometheus export.

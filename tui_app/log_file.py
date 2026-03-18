@@ -5,6 +5,7 @@ import os
 import re
 import threading
 from datetime import datetime, timezone
+from typing import Callable
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
@@ -42,6 +43,7 @@ class FileLogger:
         self._warned_keys: set[str] = set()
         self._lock = threading.Lock()
         self._tail: collections.deque[tuple[str, str]] = collections.deque(maxlen=max(1, int(max_tail)))
+        self._subscribers: list[Callable[[str, str], None]] = []
         self._open_sink()
 
     @classmethod
@@ -125,11 +127,13 @@ class FileLogger:
         trimmed = data[:keep].decode("utf-8", errors="ignore")
         return trimmed + marker
 
-    def _render_line(self, source: str, message: str) -> str:
+    def _canonical_message(self, message: str) -> str:
         normalized = self._normalize_single_line(message)
         redacted = self._redact(normalized)
-        truncated = self._truncate(redacted)
-        return f"{self._ts_utc()} [{source}] {truncated}"
+        return self._truncate(redacted)
+
+    def _render_line(self, source: str, message: str) -> str:
+        return f"{self._ts_utc()} [{source}] {message}"
 
     def _open_sink(self) -> None:
         if not self.path:
@@ -146,10 +150,13 @@ class FileLogger:
 
     def log(self, message: str, *, source: str | None = None) -> None:
         src = (source or self.default_source or "backend").strip() or "backend"
-        line = self._render_line(src, message)
+        canonical_message = self._canonical_message(message)
+        line = self._render_line(src, canonical_message)
         warn_message = ""
+        subscribers: list[Callable[[str, str], None]] = []
         with self._lock:
             self._tail.append((src, line))
+            subscribers = list(self._subscribers)
             if self._fh is not None:
                 try:
                     self._fh.write(line + "\n")
@@ -162,8 +169,17 @@ class FileLogger:
                     self._fh = None
                     self._sink_failed = True
                     warn_message = f"Log file sink disabled after write failure: {exc}"
+        for subscriber in subscribers:
+            try:
+                subscriber(src, canonical_message)
+            except Exception:
+                continue
         if warn_message:
             self.warn_once("sink_write_failed", warn_message)
+
+    def subscribe(self, callback: Callable[[str, str], None]) -> None:
+        with self._lock:
+            self._subscribers.append(callback)
 
     def warn_once(self, key: str, message: str, *, source: str = "app") -> None:
         with self._lock:

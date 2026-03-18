@@ -22,6 +22,7 @@ from textual.widgets import Static, TextArea
 from tui_app.backends.base import BackendSession, Event
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnStart
 from tui_app.knobs import build_intent_knobs
+from tui_app.telemetry import TelemetryContext, build_runtime_sample_payload
 from tui_app.tools import build_tool_runtime
 
 
@@ -424,6 +425,7 @@ class TranscriptPane(VerticalScroll):
 class TuiRuntime:
     session: BackendSession
     args: argparse.Namespace
+    telemetry: TelemetryContext | None = None
 
 
 class UnifiedTuiApp(App):
@@ -481,6 +483,10 @@ class UnifiedTuiApp(App):
         self.shutdown_backend_on_exit = True
         self._register_show_topics()
         self._register_commands()
+        self._telemetry_finished = False
+        self._telemetry_status = "finished"
+        self._pending_turn_started_at: float | None = None
+        self._pending_turn_first_token_at: float | None = None
 
     def compose(self) -> ComposeResult:
         self.transcript = TranscriptPane(id="transcript")
@@ -499,9 +505,40 @@ class UnifiedTuiApp(App):
         self.transcript.can_focus = True
         interval_s = max(0.01, float(self.runtime.args.ui_tick_ms) / 1000.0)
         self.set_interval(interval_s, self._drain_events)
+        telemetry = self.runtime.telemetry
+        sample_interval = float(getattr(self.runtime.args, "telemetry_sample_interval_s", 0.0) or 0.0)
+        if telemetry is not None and telemetry.enabled and sample_interval > 0:
+            self.set_interval(max(0.25, sample_interval), self._emit_runtime_sample)
         self.call_after_refresh(self._scroll_to_end_now)
         # Keep typing flow immediate: start with the input focused.
         self.query_one("#chat-input", TextArea).focus()
+
+    def on_unmount(self):
+        telemetry = self.runtime.telemetry
+        if telemetry is not None and telemetry.enabled and not self._telemetry_finished:
+            telemetry.publish_session_finished(status=self._telemetry_status)
+            self._telemetry_finished = True
+
+    def _emit_runtime_sample(self) -> None:
+        telemetry = self.runtime.telemetry
+        if telemetry is None or not telemetry.enabled:
+            return
+        generated_tokens = 0
+        elapsed_s = 0.0
+        if self.is_generating and self.pending_assistant is not None:
+            generated_tokens = int(getattr(self.pending_assistant.thinking_panel, "generated_tokens", 0) or 0)
+            started_at = getattr(self.pending_assistant.thinking_panel, "started_at", None)
+            if isinstance(started_at, (int, float)):
+                elapsed_s = max(0.0, time.time() - float(started_at))
+        payload = build_runtime_sample_payload(
+            telemetry=telemetry,
+            session=self.runtime.session,
+            generated_tokens=generated_tokens,
+            elapsed_s=elapsed_s,
+            requests_completed_total=len(self.turn_records),
+            requests_in_flight=1 if self.is_generating else 0,
+        )
+        telemetry.publish_runtime_sample(payload)
 
     def action_toggle_latest_thinking(self):
         if self.pending_assistant is not None:
@@ -517,6 +554,8 @@ class UnifiedTuiApp(App):
             return
         if self.pending_assistant is None:
             self.is_generating = False
+            self._pending_turn_started_at = None
+            self._pending_turn_first_token_at = None
             self.pending_turn_id += 1
             self.notify("Generation stopped.", severity="information")
             return
@@ -524,6 +563,8 @@ class UnifiedTuiApp(App):
         self.pending_assistant.append_answer("\n[Generation stopped by user]")
         self.pending_assistant.thinking_panel.finish(ended_in_think=False)
         self.is_generating = False
+        self._pending_turn_started_at = None
+        self._pending_turn_first_token_at = None
         # Advance turn id so late events from the interrupted worker are ignored.
         self.pending_turn_id += 1
         if self._should_autofollow():
@@ -663,6 +704,8 @@ class UnifiedTuiApp(App):
         self.pending_turn_id += 1
         turn_id = self.pending_turn_id
         self.is_generating = True
+        self._pending_turn_started_at = None
+        self._pending_turn_first_token_at = None
 
         self.follow_output = True
         self.transcript.refresh(layout=True)
@@ -674,6 +717,11 @@ class UnifiedTuiApp(App):
         thread.start()
 
     async def _append_info(self, command: str, output: str):
+        if not self.is_running:
+            return
+        transcript = getattr(self, "transcript", None)
+        if transcript is None or not getattr(transcript, "is_attached", False):
+            return
         await self.transcript.mount(InfoMessage(command=command, text=output))
         if self._should_autofollow():
             self._request_scroll_end()
@@ -1848,10 +1896,18 @@ class UnifiedTuiApp(App):
                 if getattr(args, "save_transcript", "")
                 else "(none)"
             ),
+            "telemetry_jsonl": (
+                resolve_path_maybe_relative(args.telemetry_jsonl, config_path=args._config_path)
+                if getattr(args, "telemetry_jsonl", "")
+                else "(none)"
+            ),
+            "telemetry_sample_interval_s": float(getattr(args, "telemetry_sample_interval_s", 0.0) or 0.0),
         }
         lines = [
             f"capture_last_request: {data['capture_last_request']}",
             f"save_transcript: {data['save_transcript']}",
+            f"telemetry_jsonl: {data['telemetry_jsonl']}",
+            f"telemetry_sample_interval_s: {data['telemetry_sample_interval_s']}",
         ]
         return self._to_json_or_lines(data, lines)
 
@@ -2101,6 +2157,11 @@ class UnifiedTuiApp(App):
             backend_tooling = {
                 "enable_auto_tool_choice": self.runtime.args.vllm_enable_auto_tool_choice,
                 "tool_call_parser": self.runtime.args.vllm_tool_call_parser or "",
+                "tool_choice": getattr(self.runtime.args, "tools_tool_choice", "") or "",
+            }
+        elif self.runtime.session.backend_name == "openai":
+            backend_tooling = {
+                "tool_choice": getattr(self.runtime.args, "tools_tool_choice", "") or "",
             }
         data["backend_tooling"] = backend_tooling
         lines = [
@@ -2109,6 +2170,7 @@ class UnifiedTuiApp(App):
             f"enabled: {data['enabled']}",
             f"mode: {data['mode']}",
             f"schema_file: {data['schema_file'] or '(none)'}",
+            f"tool_choice: {data.get('tool_choice') or '(default)'}",
             f"allow: {data['allow']}",
             f"deny: {data['deny']}",
             f"max_calls_per_turn: {data['max_calls_per_turn']}",
@@ -2269,6 +2331,7 @@ class UnifiedTuiApp(App):
 
             if isinstance(ev, TurnStart):
                 if getattr(ev, "turn_id", None) == self.pending_turn_id and self.pending_assistant is not None:
+                    self._pending_turn_started_at = time.time()
                     self.pending_assistant.start_turn()
                 continue
 
@@ -2277,7 +2340,10 @@ class UnifiedTuiApp(App):
 
             if isinstance(ev, Meta):
                 if ev.key == "generated_tokens_inc":
-                    pending_generated_token_inc += int(ev.value)
+                    token_inc = int(ev.value)
+                    if token_inc > 0 and self._pending_turn_first_token_at is None:
+                        self._pending_turn_first_token_at = time.time()
+                    pending_generated_token_inc += token_inc
                 continue
 
             if pending_generated_token_inc:
@@ -2296,6 +2362,11 @@ class UnifiedTuiApp(App):
                 self.pending_assistant.append_answer(f"\n[Generation error] {ev.message}")
                 self.pending_assistant.thinking_panel.finish(ended_in_think=False)
                 self.is_generating = False
+                self._pending_turn_started_at = None
+                self._pending_turn_first_token_at = None
+                telemetry = self.runtime.telemetry
+                if telemetry is not None and telemetry.enabled:
+                    telemetry.publish_error(scope="turn", message=ev.message)
             elif isinstance(ev, Finish):
                 record = ev.record
                 self.pending_assistant.finish(record)
@@ -2307,7 +2378,22 @@ class UnifiedTuiApp(App):
                 self.turn_records.append(record)
                 if self.runtime.args.save_transcript:
                     self._append_transcript_record(record)
+                telemetry = self.runtime.telemetry
+                if telemetry is not None and telemetry.enabled:
+                    timing = record.timing if isinstance(record.timing, dict) else {}
+                    if "time_to_first_token" not in timing and self._pending_turn_first_token_at is not None:
+                        started_at = timing.get("start")
+                        if not isinstance(started_at, (int, float)):
+                            started_at = self._pending_turn_started_at
+                        if isinstance(started_at, (int, float)):
+                            timing["time_to_first_token"] = max(
+                                0.0,
+                                float(self._pending_turn_first_token_at) - float(started_at),
+                            )
+                    telemetry.publish_turn_finished(turn_id=ev.turn_id, record=record)
                 self.is_generating = False
+                self._pending_turn_started_at = None
+                self._pending_turn_first_token_at = None
                 if self._should_autofollow():
                     self._request_scroll_end()
 

@@ -303,6 +303,31 @@ def _infer_context_window(model, tokenizer) -> int | None:
     return None
 
 
+def _normalize_eos_token_ids(eos_token_id) -> set[int]:
+    if isinstance(eos_token_id, int):
+        return {int(eos_token_id)}
+    if isinstance(eos_token_id, (list, tuple, set)):
+        return {int(value) for value in eos_token_id if isinstance(value, int)}
+    return set()
+
+
+def _infer_hf_finish_reason(
+    *,
+    generated_token_ids: list[int],
+    completion_tokens: int,
+    max_new_tokens: int | None,
+    eos_token_id,
+) -> tuple[str | None, str | None]:
+    if isinstance(max_new_tokens, int) and max_new_tokens > 0 and completion_tokens >= max_new_tokens:
+        return "length", "local_max_new_tokens_cap"
+    eos_token_ids = _normalize_eos_token_ids(eos_token_id)
+    if generated_token_ids and eos_token_ids and int(generated_token_ids[-1]) in eos_token_ids:
+        return "stop", "local_eos_token"
+    if completion_tokens > 0:
+        return "stop", "local_hf_stopping_criteria"
+    return None, None
+
+
 def apply_context_limit(
     tokenizer,
     messages,
@@ -360,6 +385,7 @@ class TokenCountingTextIteratorStreamer(BaseStreamer):
         self.print_len = 0
         self.next_tokens_are_prompt = True
         self.generated_token_count = 0
+        self.generated_token_ids = []
         self.mode = "think" if assume_think else "answer"
         self.start_marker_ids = self._single_token_marker_ids(
             ["<think>", "<|begin_of_thought|>", "<｜begin_of_thought｜>", "<｜begin▁of▁thought｜>"]
@@ -402,6 +428,7 @@ class TokenCountingTextIteratorStreamer(BaseStreamer):
 
         token_ids = value.tolist()
         self.generated_token_count += len(token_ids)
+        self.generated_token_ids.extend(int(token_id) for token_id in token_ids)
         think_inc = 0
         for token_id in token_ids:
             if token_id in self.start_marker_ids:
@@ -506,6 +533,7 @@ class HFSession:
     def describe(self) -> dict[str, object]:
         weights_quantization = "8bit" if bool(getattr(self.args, "use_8bit", False)) else "4bit" if bool(getattr(self.args, "use_4bit", False)) else "none"
         model = self.model
+        context_length_effective = _infer_context_window(model, self.tokenizer)
         runtime_attn = getattr(getattr(model, "config", None), "_attn_implementation", None)
         runtime_dtype = None
         runtime_device = None
@@ -586,6 +614,7 @@ class HFSession:
             "hf_max_memory_effective": max_memory_effective,
             "hf_low_cpu_mem_usage": getattr(self.args, "hf_low_cpu_mem_usage", None),
             "runtime_device": runtime_device,
+            "context_length_effective": context_length_effective,
             "modules_on_cpu": modules_on_cpu,
             "modules_on_disk": modules_on_disk,
             "fully_on_single_gpu": fully_on_single_gpu,
@@ -739,12 +768,14 @@ class HFSession:
                 if gen_error:
                     raise RuntimeError(str(gen_error[0]))
                 completion_tokens = int(getattr(streamer, "generated_token_count", 0))
+                generated_token_ids = [int(token_id) for token_id in getattr(streamer, "generated_token_ids", [])]
             else:
                 input_len = model_inputs["input_ids"].shape[-1]
                 with torch.no_grad():
                     outputs = model.generate(**model_inputs, **generate_kwargs)
                 new_tokens = outputs[0, input_len:].tolist()
                 completion_tokens = len(new_tokens)
+                generated_token_ids = [int(token_id) for token_id in new_tokens]
                 for token_id in new_tokens:
                     emit(Meta(turn_id=turn_id, key="generated_tokens_inc", value=1))
                     piece = tokenizer.decode(
@@ -778,7 +809,24 @@ class HFSession:
             throughput = None
             if completion_tokens > 0 and elapsed > 0:
                 throughput = {"tokens_per_s": completion_tokens / elapsed}
+            finish_reason, finish_reason_source = _infer_hf_finish_reason(
+                generated_token_ids=generated_token_ids,
+                completion_tokens=int(completion_tokens),
+                max_new_tokens=args.max_new_tokens,
+                eos_token_id=tokenizer.eos_token_id,
+            )
             answer_text = "".join(answer_parts)
+            gen = {
+                "max_new_tokens": args.max_new_tokens,
+                "temperature": args.temperature,
+                "top_p": args.top_p,
+                "top_k": args.top_k,
+                "repetition_penalty": args.repetition_penalty,
+            }
+            if finish_reason is not None:
+                gen["finish_reason"] = finish_reason
+            if finish_reason_source is not None:
+                gen["finish_reason_source"] = finish_reason_source
             record = TurnRecord(
                 raw="".join(raw_parts),
                 think="".join(think_parts),
@@ -786,13 +834,7 @@ class HFSession:
                 ended_in_think=(router.mode == "think"),
                 backend=self.backend_name,
                 model_id=self.resolved_model_id,
-                gen={
-                    "max_new_tokens": args.max_new_tokens,
-                    "temperature": args.temperature,
-                    "top_p": args.top_p,
-                    "top_k": args.top_k,
-                    "repetition_penalty": args.repetition_penalty,
-                },
+                gen=gen,
                 timing={"start": started, "end": ended, "elapsed": elapsed},
                 token_counts={
                     "prompt_tokens": prompt_tokens,

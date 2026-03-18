@@ -16,6 +16,7 @@ from tui_app.backends.hf import create_session as create_hf_session
 from tui_app.backends.ollama import create_session as create_ollama_session
 from tui_app.backends.openai import create_session as create_openai_session
 from tui_app.backends.vllm import create_session as create_vllm_session, shutdown_managed_server
+from tui_app.telemetry import TelemetryContext, attach_log_subscribers
 
 
 def normalize_windows_path(raw: str) -> str:
@@ -226,6 +227,7 @@ def build_parser() -> argparse.ArgumentParser:
     tools_enabled_group.add_argument("--no-tools-enabled", dest="tools_enabled", action="store_false")
     parser.add_argument("--tools-mode", choices=["off", "dry_run", "execute"], default="dry_run")
     parser.add_argument("--tools-schema-file", default="")
+    parser.add_argument("--tools-tool-choice", default="")
     parser.add_argument("--tools-allow", nargs="+", default=None)
     parser.add_argument("--tools-deny", nargs="+", default=None)
     parser.add_argument("--tools-max-calls-per-turn", type=int, default=3)
@@ -239,6 +241,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--ui-tick-ms", type=int, default=33)
     parser.add_argument("--ui-max-events-per-tick", type=int, default=120)
     parser.add_argument("--capture-last-request", action="store_true")
+    parser.add_argument("--telemetry-jsonl", default="")
+    parser.add_argument("--telemetry-sample-interval-s", type=float, default=1.0)
 
     parser.add_argument("--dtype", choices=["auto", "float16", "bfloat16", "float32"], default="auto")
     parser.add_argument("--hf-attn", dest="hf_attn_implementation", choices=["eager", "sdpa", "flash_attention_2"], default=None)
@@ -403,6 +407,7 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "tools_enabled",
         "tools_mode",
         "tools_schema_file",
+        "tools_tool_choice",
         "tools_allow",
         "tools_deny",
         "tools_max_calls_per_turn",
@@ -413,6 +418,8 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "ui_tick_ms",
         "ui_max_events_per_tick",
         "capture_last_request",
+        "telemetry_jsonl",
+        "telemetry_sample_interval_s",
         "dtype",
         "hf_attn_implementation",
         "hf_log_file",
@@ -518,10 +525,13 @@ def _detect_cli_overrides(argv: list[str]) -> set[str]:
         "--assume-think": "assume_think",
         "--no-assume-think": "assume_think",
         "--capture-last-request": "capture_last_request",
+        "--telemetry-jsonl": "telemetry_jsonl",
+        "--telemetry-sample-interval-s": "telemetry_sample_interval_s",
         "--tools-enabled": "tools_enabled",
         "--no-tools-enabled": "tools_enabled",
         "--tools-mode": "tools_mode",
         "--tools-schema-file": "tools_schema_file",
+        "--tools-tool-choice": "tools_tool_choice",
         "--tools-allow": "tools_allow",
         "--tools-deny": "tools_deny",
         "--tools-max-calls-per-turn": "tools_max_calls_per_turn",
@@ -713,6 +723,8 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
         "ui_tick_ms",
         "ui_max_events_per_tick",
         "capture_last_request",
+        "telemetry_jsonl",
+        "telemetry_sample_interval_s",
     }
 
     used = common | backend_relevant[backend]
@@ -787,6 +799,7 @@ def parse_args() -> argparse.Namespace:
     args._config_profile = pre_args.profile or ""
     args._config_layers = list(config_meta.get("loaded", []) or ([] if not config_path else [config_path]))
     args._config_origins = dict(config_meta.get("origins", {}) or {})
+    args.display_name = str(config_data.get("display_name", "") or "") if isinstance(config_data, dict) else ""
     early_backend = detect_backend(args.model_id, args.backend)
     if early_backend == "openai" and not pre_args.model_id:
         # Attach mode should not inherit a local model path from config defaults.
@@ -892,6 +905,7 @@ def _mirror_engine_logs_to_stdout(
 def main() -> None:
     args = parse_args()
     session = None
+    telemetry = None
 
     if args.shutdown_backend:
         if args.backend != "vllm":
@@ -930,6 +944,12 @@ def main() -> None:
         print(f"Failed to initialize backend '{args.backend}': {exc}")
         print("If tokenizer conversion fails, install: sentencepiece, tiktoken, protobuf")
         sys.exit(1)
+
+    telemetry = TelemetryContext.create(args, session)
+    if telemetry.enabled:
+        attach_log_subscribers(session, lambda source, line: telemetry.publish_log_record(source=source, message=line))
+        telemetry.publish_session_started()
+        telemetry.publish_load_report(session, args)
 
     if args.backend_only:
         if args.backend != "vllm":
@@ -973,6 +993,9 @@ def main() -> None:
         except KeyboardInterrupt:
             pass
         finally:
+            if telemetry is not None and telemetry.enabled:
+                telemetry.publish_session_finished(status="finished")
+                telemetry.close()
             if mirror_stop is not None:
                 mirror_stop.set()
             for thread in mirror_threads:
@@ -989,12 +1012,14 @@ def main() -> None:
         return
 
     print(f"TUI ready (backend={args.backend}). Commands: /exit, /quit, /clear. Ctrl+Q exits TUI only.")
-    app = UnifiedTuiApp(TuiRuntime(session=session, args=args))
+    app = UnifiedTuiApp(TuiRuntime(session=session, args=args, telemetry=telemetry))
     if args.detach_backend:
         app.shutdown_backend_on_exit = False
     try:
         app.run()
     finally:
+        if telemetry is not None and telemetry.enabled:
+            telemetry.close()
         if not getattr(app, "shutdown_backend_on_exit", True):
             detacher = getattr(session, "detach", None)
             if callable(detacher):

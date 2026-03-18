@@ -25,6 +25,10 @@ show_thinking = false
 show_tool_activity = false
 show_tool_arguments = false
 
+[telemetry]
+jsonl = ""
+sample_interval_s = 1.0
+
 [tools]
 enabled = false
 mode = "dry_run"

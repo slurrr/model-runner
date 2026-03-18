@@ -1,5 +1,5 @@
 {
-  "model_id": "/home/poop/ml/models/Qwen3.5-9B",
+  "model_id": "Qwen3.5-9B",
   "dtype": "bfloat16",
   "hf_attn_implementation": "flash_attention_2",
   "use_8bit": false,

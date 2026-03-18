@@ -219,11 +219,29 @@ Precedence:
 
 This repo is not trying to be a minimal polished app. It is trying to become a useful local model research environment.
 
+From a contributor perspective, the repo operates on two different kinds of documents:
+- **Decision records** capture contracts and invariants the repo has discovered or chosen.
+  - They explain what must stay true across refactors, standardization passes, and new backend work.
+  - Treat them as the repo's operating agreements, not as disposable notes.
+- **Specs** describe concrete implementation passes.
+  - They are instructions for how to execute a change or feature once the direction is understood.
+  - They may evolve, but they should not silently violate existing decision records.
+
+In practice:
+- consult decision records first when you need to understand what behavior is supposed to remain invariant
+- use specs to drive the implementation work for a specific pass
+- if implementation reveals a new invariant, ambiguity, or repo-wide rule, capture that in a decision record instead of leaving it trapped in code or chat history
+
 When making changes:
 - prefer backend truth over inferred summaries
 - preserve local-first workflows
 - keep models comparable across backends where practical
 - document model/runtime quirks in-repo
 - treat observability as a first-class feature, not a nice-to-have
+- distinguish clearly between:
+  - requested/configured behavior
+  - effective/runtime behavior
+  - unknown/unavailable runtime truth
+- avoid hiding backend-specific realities behind fake uniformity; standardize the surface, not the facts
 
 The current TUI is still worth improving, but new work should not assume terminal UX is the final destination for runtime debugging and optimization.

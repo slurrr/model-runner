@@ -44,10 +44,15 @@ show_tool_arguments = false
 ui_tick_ms = 33
 ui_max_events_per_tick = 120
 
+[telemetry]
+jsonl = ""
+sample_interval_s = 1.0
+
 [tools]
 enabled = true
 mode = "execute"
 schema_file = ""
+tool_choice = ""
 allow = []
 deny = []
 max_calls_per_turn = 3
@@ -59,17 +64,17 @@ mode = "managed"
 host = "127.0.0.1"
 port = 40223
 cmd = "vllm"
-extra_args = ["--swap-space", "8", "--max-num-seqs", "1", "--enable-log-requests", "--stream-interval", "1", "--kv-cache-dtype", "fp8_e5m2"]
+extra_args = ["--swap-space", "0", "--max-num-seqs", "1", "--enable-log-requests", "--stream-interval", "1"]
 base_url = ""
 api_key = ""
 timeout_s = 900
 generation_config = "vllm"
-attention_backend = "FLASHINFER"
+attention_backend = ""
 dtype = "bfloat16"
 enable_auto_tool_choice = true
 tool_call_parser = "qwen3_xml"
-log_file = "logs/vllm-debug.log"
+log_file = ""
 served_model_name = "Qwen3.5-9B"
 tensor_parallel_size = 1
 gpu_memory_utilization = 0.933
-max_model_len = 41984
+max_model_len = 21120

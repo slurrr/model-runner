@@ -31,6 +31,10 @@ show_tool_arguments = false
 ui_max_events_per_tick = 33
 ui_tick_ms = 33
 
+[telemetry]
+jsonl = ""
+sample_interval_s = 1.0
+
 [tools]
 enabled = false
 mode = "dry_run"
@@ -51,5 +55,5 @@ log_file = ""
 low_mem = false
 max_seq_len = 32768
 min_free_tokens = 256
-model_path = "~/ml/models"
+model_path = ""
 flash_attn = true
