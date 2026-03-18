@@ -4,3 +4,5 @@ Short, practical audits of current behavior (e.g., output parsing, streaming beh
 
 - `docs/audits/0001-hide-think.md`: Audit of `chat.py` hide-think behavior and common failure modes.
 - `docs/audits/0002-exllamav2-examples-chat-findings.md`: Findings from upstream ExLlamaV2 `examples/chat.py` and prompt formats.
+- `docs/audits/0003-standardization.md`: Audit of backend consistency in the unified TUI and a standardization roadmap.
+- `docs/audits/0004_tui_logging.md`: Standard for backend/session logging surfaced in the TUI.

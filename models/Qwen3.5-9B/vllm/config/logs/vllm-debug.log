@@ -1,0 +1,256 @@
+2026-03-11T15:51:36.942Z [app] launch_argv: vllm serve /home/poop/ml/models/Qwen3.5-9B --host 127.0.0.1 --port 45475 --served-model-name Qwen3.5-9B --tensor-parallel-size 1 --gpu-memory-utilization 0.92 --max-model-len 32768 --generation-config vllm --attention-backend FLASH_ATTN --dtype bfloat16 --swap-space 0 --max-num-seqs 1 --enable-log-requests --enable-force-include-usage
+2026-03-11T15:51:40.953Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [utils.py:302]
+2026-03-11T15:51:40.953Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [utils.py:302]        █     █     █▄   ▄█
+2026-03-11T15:51:40.953Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+2026-03-11T15:51:40.953Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+2026-03-11T15:51:40.953Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+2026-03-11T15:51:40.953Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [utils.py:302]
+2026-03-11T15:51:40.955Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 45475, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 32768, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'FLASH_ATTN', 'gpu_memory_utilization': 0.92, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+2026-03-11T15:51:40.959Z [engine_stderr] (APIServer pid=3575772) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_interleaved', 'mrope_section'}
+2026-03-11T15:51:40.960Z [engine_stderr] (APIServer pid=3575772) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_interleaved', 'mrope_section'}
+2026-03-11T15:51:40.961Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+2026-03-11T15:51:40.961Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:40 [model.py:1554] Using max model len 32768
+2026-03-11T15:51:41.025Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:41 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+2026-03-11T15:51:41.164Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:41 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+2026-03-11T15:51:41.164Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:41 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+2026-03-11T15:51:41.165Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:51:41 [vllm.py:747] Asynchronous scheduling is enabled.
+2026-03-11T15:51:43.309Z [engine_stderr] (APIServer pid=3575772) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_interleaved', 'mrope_section'}
+2026-03-11T15:51:43.310Z [engine_stderr] (APIServer pid=3575772) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_interleaved', 'mrope_section'}
+2026-03-11T15:51:49.683Z [engine_stdout] (APIServer pid=3575772) WARNING 03-11 09:51:49 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+2026-03-11T15:51:53.278Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:51:53 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=32768, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+2026-03-11T15:51:53.346Z [engine_stdout] (EngineCore_DP0 pid=3575986) WARNING 03-11 09:51:53 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+2026-03-11T15:51:54.837Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:51:54 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:44259 backend=nccl
+2026-03-11T15:52:04.847Z [engine_stderr] [W311 09:52:04.590661414 socket.cpp:207] [c10d] The hostname of the client socket cannot be retrieved. err=-3
+2026-03-11T15:52:04.886Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:04 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+2026-03-11T15:52:10.809Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:10 [base.py:106] Offloader set to NoopOffloader
+2026-03-11T15:52:10.813Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:10 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+2026-03-11T15:52:11.139Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:11 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+2026-03-11T15:52:11.139Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:11 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+2026-03-11T15:52:11.187Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:11 [cuda.py:368] Using AttentionBackendEnum.FLASH_ATTN backend.
+2026-03-11T15:52:11.188Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:11 [flash_attn.py:587] Using FlashAttention version 2
+2026-03-11T15:52:11.847Z [engine_stderr] (EngineCore_DP0 pid=3575986) <frozen importlib._bootstrap_external>:1241: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+2026-03-11T15:52:11.847Z [engine_stderr] (EngineCore_DP0 pid=3575986) <frozen importlib._bootstrap_external>:1241: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+2026-03-11T15:52:11.865Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:11.866Z [engine_stderr] Loading safetensors checkpoint shards:   0% Completed | 0/4 [00:00<?, ?it/s]
+2026-03-11T15:52:12.791Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:12.791Z [engine_stderr] Loading safetensors checkpoint shards:  25% Completed | 1/4 [00:00<00:02,  1.08it/s]
+2026-03-11T15:52:14.378Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:14.378Z [engine_stderr] Loading safetensors checkpoint shards:  50% Completed | 2/4 [00:02<00:02,  1.31s/it]
+2026-03-11T15:52:15.694Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:15.694Z [engine_stderr] Loading safetensors checkpoint shards:  75% Completed | 3/4 [00:03<00:01,  1.32s/it]
+2026-03-11T15:52:16.883Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:16.883Z [engine_stderr] Loading safetensors checkpoint shards: 100% Completed | 4/4 [00:05<00:00,  1.27s/it]
+2026-03-11T15:52:16.883Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:16.883Z [engine_stderr] Loading safetensors checkpoint shards: 100% Completed | 4/4 [00:05<00:00,  1.25s/it]
+2026-03-11T15:52:16.883Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:16.978Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:16 [default_loader.py:293] Loading weights took 5.11 seconds
+2026-03-11T15:52:17.262Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:17 [gpu_model_runner.py:4338] Model loading took 17.66 GiB memory and 5.945560 seconds
+2026-03-11T15:52:17.411Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:17 [gpu_model_runner.py:5254] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+2026-03-11T15:52:24.177Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:24 [decorators.py:465] Directly load AOT compilation from path /home/poop/.cache/vllm/torch_compile_cache/torch_aot_compile/aa502e1b3c0a484a190e791c11e324ca8b5a67682ddeaae5335fb2252a6cbdec/rank_0_0/model
+2026-03-11T15:52:24.251Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:24 [backends.py:916] Using cache directory: /home/poop/.cache/vllm/torch_compile_cache/b94bc218b2/rank_0_0/backbone for vLLM's torch.compile
+2026-03-11T15:52:24.252Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:24 [backends.py:976] Dynamo bytecode transform time: 1.00 s
+2026-03-11T15:52:25.722Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:25 [backends.py:266] Directly load the compiled graph(s) for compile range (1, 2048) from the cache, took 1.143 s
+2026-03-11T15:52:25.722Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:25 [monitor.py:35] torch.compile takes 2.47 s in total
+2026-03-11T15:52:26.227Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:26 [gpu_worker.py:424] Available KV cache memory: 2.48 GiB
+2026-03-11T15:52:26.227Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:26 [kv_cache_utils.py:1314] GPU KV cache size: 20,064 tokens
+2026-03-11T15:52:26.227Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:26 [kv_cache_utils.py:1319] Maximum concurrency for 32,768 tokens per request: 2.33x
+2026-03-11T15:52:26.431Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:26.537Z [engine_stderr] Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/2 [00:00<?, ?it/s]
+2026-03-11T15:52:26.537Z [engine_stderr] Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 2/2 [00:00<00:00, 18.89it/s]
+2026-03-11T15:52:26.537Z [engine_stderr] Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 2/2 [00:00<00:00, 18.86it/s]
+2026-03-11T15:52:26.537Z [engine_stderr] (EngineCore_DP0 pid=3575986)
+2026-03-11T15:52:26.604Z [engine_stderr] Capturing CUDA graphs (decode, FULL):   0%|          | 0/1 [00:00<?, ?it/s]
+2026-03-11T15:52:26.605Z [engine_stderr] Capturing CUDA graphs (decode, FULL): 100%|██████████| 1/1 [00:00<00:00, 14.82it/s]
+2026-03-11T15:52:26.801Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:26 [gpu_model_runner.py:5360] Graph capturing finished in 1 secs, took 0.04 GiB
+2026-03-11T15:52:26.812Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:26 [core.py:282] init engine (profile, create kv cache, warmup model) took 9.55 seconds
+2026-03-11T15:52:27.002Z [engine_stdout] (EngineCore_DP0 pid=3575986) INFO 03-11 09:52:27 [vllm.py:747] Asynchronous scheduling is enabled.
+2026-03-11T15:52:27.176Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:27 [api_server.py:495] Supported tasks: ['generate']
+2026-03-11T15:52:27.224Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:27 [logger.py:28] `--enable-log-requests` is set but the minimum log level is higher than DEBUG. Only limited information will be logged to minimize overhead. To view more details, set `VLLM_LOGGING_LEVEL=DEBUG`.
+2026-03-11T15:52:27.225Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:27 [serving.py:185] Warming up chat template processing...
+2026-03-11T15:52:29.037Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [hf.py:318] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [serving.py:210] Chat template warmup completed in 1826.9ms
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [api_server.py:500] Starting vLLM API server 0 on http://127.0.0.1:45475
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:38] Available routes are:
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /openapi.json, Methods: HEAD, GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /docs, Methods: HEAD, GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /docs/oauth2-redirect, Methods: HEAD, GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /redoc, Methods: HEAD, GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /tokenize, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /detokenize, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /load, Methods: GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /version, Methods: GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /health, Methods: GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /metrics, Methods: GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/models, Methods: GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /ping, Methods: GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /ping, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /invocations, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/chat/completions, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/chat/completions/render, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/responses, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/responses/{response_id}, Methods: GET
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/responses/{response_id}/cancel, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/completions, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/completions/render, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/messages, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /v1/messages/count_tokens, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /inference/v1/generate, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /scale_elastic_ep, Methods: POST
+2026-03-11T15:52:29.052Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:52:29 [launcher.py:47] Route: /is_scaling_elastic_ep, Methods: POST
+2026-03-11T15:52:29.062Z [engine_stderr] (APIServer pid=3575772) INFO:     Started server process [3575772]
+2026-03-11T15:52:29.062Z [engine_stderr] (APIServer pid=3575772) INFO:     Waiting for application startup.
+2026-03-11T15:52:29.210Z [engine_stderr] (APIServer pid=3575772) INFO:     Application startup complete.
+2026-03-11T15:52:29.403Z [engine_stdout] (APIServer pid=3575772) INFO:     127.0.0.1:51364 - "GET /v1/models HTTP/1.1" 200 OK
+2026-03-11T15:52:29.404Z [backend] backend_ready base_url=http://127.0.0.1:45475/v1 model=Qwen3.5-9B
+2026-03-11T15:55:15.931Z [transport] turn_start id=1 messages=2 model=Qwen3.5-9B max_new_tokens=8192
+2026-03-11T15:55:15.939Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:55:15 [logger.py:63] Received request chatcmpl-a1343efabe6fbe72: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.0, temperature=0.7, top_p=1.0, top_k=0, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+2026-03-11T15:55:15.942Z [engine_stdout] (APIServer pid=3575772) INFO:     127.0.0.1:46308 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-03-11T15:55:15.947Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:55:15 [async_llm.py:421] Added request chatcmpl-a1343efabe6fbe72-9093cab5.
+2026-03-11T15:55:29.212Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:55:29 [loggers.py:259] Engine 000: Avg prompt throughput: 32.5 tokens/s, Avg generation throughput: 15.6 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 2.6%, Prefix cache hit rate: 0.0%
+2026-03-11T15:55:37.633Z [transport] turn_finish id=1 elapsed_s=21.701 think_chars=1672 answer_chars=787
+2026-03-11T15:55:39.213Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:55:39 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 46.9 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+2026-03-11T15:55:49.213Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 09:55:49 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+2026-03-11T17:33:48.462Z [engine_stdout] (APIServer pid=3575772) INFO 03-11 11:33:48 [launcher.py:122] Shutting down FastAPI HTTP server.
+2026-03-11T17:33:49.445Z [engine_stderr] [rank0]:[W311 11:33:49.188063143 ProcessGroupNCCL.cpp:1553] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+2026-03-11T17:33:50.892Z [engine_stderr] (APIServer pid=3575772) INFO:     Shutting down
+2026-03-11T17:33:50.993Z [engine_stderr] (APIServer pid=3575772) INFO:     Waiting for application shutdown.
+2026-03-11T17:33:50.995Z [engine_stderr] (APIServer pid=3575772) INFO:     Application shutdown complete.
+2026-03-11T19:47:56.267Z [app] launch_argv: vllm serve /home/poop/ml/models/Qwen3.5-9B --host 127.0.0.1 --port 40037 --served-model-name Qwen3.5-9B --tensor-parallel-size 1 --gpu-memory-utilization 0.92 --max-model-len 32768 --generation-config vllm --attention-backend FLASH_ATTN --dtype bfloat16 --swap-space 0 --max-num-seqs 1 --enable-log-requests --enable-force-include-usage
+2026-03-11T19:48:01.090Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [utils.py:302]
+2026-03-11T19:48:01.090Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [utils.py:302]        █     █     █▄   ▄█
+2026-03-11T19:48:01.090Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+2026-03-11T19:48:01.090Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+2026-03-11T19:48:01.090Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+2026-03-11T19:48:01.090Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [utils.py:302]
+2026-03-11T19:48:01.092Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40037, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 32768, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'FLASH_ATTN', 'gpu_memory_utilization': 0.92, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+2026-03-11T19:48:01.098Z [engine_stderr] (APIServer pid=3733512) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_section', 'mrope_interleaved'}
+2026-03-11T19:48:01.099Z [engine_stderr] (APIServer pid=3733512) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_section', 'mrope_interleaved'}
+2026-03-11T19:48:01.100Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+2026-03-11T19:48:01.100Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [model.py:1554] Using max model len 32768
+2026-03-11T19:48:01.210Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+2026-03-11T19:48:01.431Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+2026-03-11T19:48:01.432Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+2026-03-11T19:48:01.432Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:48:01 [vllm.py:747] Asynchronous scheduling is enabled.
+2026-03-11T19:48:03.551Z [engine_stderr] (APIServer pid=3733512) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_section', 'mrope_interleaved'}
+2026-03-11T19:48:03.552Z [engine_stderr] (APIServer pid=3733512) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_section', 'mrope_interleaved'}
+2026-03-11T19:48:10.055Z [engine_stdout] (APIServer pid=3733512) WARNING 03-11 13:48:10 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+2026-03-11T19:48:13.746Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:13 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=32768, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+2026-03-11T19:48:13.837Z [engine_stdout] (EngineCore_DP0 pid=3733721) WARNING 03-11 13:48:13 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+2026-03-11T19:48:15.450Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:15 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:53021 backend=nccl
+2026-03-11T19:48:25.457Z [engine_stderr] [W311 13:48:25.200090465 socket.cpp:207] [c10d] The hostname of the client socket cannot be retrieved. err=-3
+2026-03-11T19:48:25.506Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:25 [parallel_state.py:1715] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+2026-03-11T19:48:31.346Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:31 [base.py:106] Offloader set to NoopOffloader
+2026-03-11T19:48:31.349Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:31 [gpu_model_runner.py:4255] Starting to load model /home/poop/ml/models/Qwen3.5-9B...
+2026-03-11T19:48:31.685Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:31 [cuda.py:453] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+2026-03-11T19:48:31.686Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:31 [mm_encoder_attention.py:215] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+2026-03-11T19:48:31.732Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:31 [cuda.py:368] Using AttentionBackendEnum.FLASH_ATTN backend.
+2026-03-11T19:48:31.732Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:31 [flash_attn.py:587] Using FlashAttention version 2
+2026-03-11T19:48:32.444Z [engine_stderr] (EngineCore_DP0 pid=3733721) <frozen importlib._bootstrap_external>:1241: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+2026-03-11T19:48:32.444Z [engine_stderr] (EngineCore_DP0 pid=3733721) <frozen importlib._bootstrap_external>:1241: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+2026-03-11T19:48:32.466Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:48:32.466Z [engine_stderr] Loading safetensors checkpoint shards:   0% Completed | 0/4 [00:00<?, ?it/s]
+2026-03-11T19:48:37.535Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:48:37.535Z [engine_stderr] Loading safetensors checkpoint shards:  25% Completed | 1/4 [00:05<00:15,  5.07s/it]
+2026-03-11T19:48:43.252Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:48:43.253Z [engine_stderr] Loading safetensors checkpoint shards:  50% Completed | 2/4 [00:10<00:10,  5.45s/it]
+2026-03-11T19:48:49.186Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:48:49.186Z [engine_stderr] Loading safetensors checkpoint shards:  75% Completed | 3/4 [00:16<00:05,  5.67s/it]
+2026-03-11T19:48:53.435Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:48:53.435Z [engine_stderr] Loading safetensors checkpoint shards: 100% Completed | 4/4 [00:20<00:00,  5.11s/it]
+2026-03-11T19:48:53.435Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:48:53.435Z [engine_stderr] Loading safetensors checkpoint shards: 100% Completed | 4/4 [00:20<00:00,  5.24s/it]
+2026-03-11T19:48:53.435Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:48:53.467Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:53 [default_loader.py:293] Loading weights took 21.00 seconds
+2026-03-11T19:48:53.760Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:53 [gpu_model_runner.py:4338] Model loading took 17.66 GiB memory and 21.902412 seconds
+2026-03-11T19:48:53.902Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:48:53 [gpu_model_runner.py:5254] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+2026-03-11T19:49:01.206Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:01 [decorators.py:465] Directly load AOT compilation from path /home/poop/.cache/vllm/torch_compile_cache/torch_aot_compile/aa502e1b3c0a484a190e791c11e324ca8b5a67682ddeaae5335fb2252a6cbdec/rank_0_0/model
+2026-03-11T19:49:01.657Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:01 [backends.py:916] Using cache directory: /home/poop/.cache/vllm/torch_compile_cache/b94bc218b2/rank_0_0/backbone for vLLM's torch.compile
+2026-03-11T19:49:01.657Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:01 [backends.py:976] Dynamo bytecode transform time: 1.34 s
+2026-03-11T19:49:03.430Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:03 [backends.py:266] Directly load the compiled graph(s) for compile range (1, 2048) from the cache, took 1.446 s
+2026-03-11T19:49:03.430Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:03 [monitor.py:35] torch.compile takes 3.11 s in total
+2026-03-11T19:49:03.931Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:03 [gpu_worker.py:424] Available KV cache memory: 2.48 GiB
+2026-03-11T19:49:03.931Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:03 [kv_cache_utils.py:1314] GPU KV cache size: 20,064 tokens
+2026-03-11T19:49:03.931Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:03 [kv_cache_utils.py:1319] Maximum concurrency for 32,768 tokens per request: 2.33x
+2026-03-11T19:49:04.127Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:49:04.237Z [engine_stderr] Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/2 [00:00<?, ?it/s]
+2026-03-11T19:49:04.237Z [engine_stderr] Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 2/2 [00:00<00:00, 18.16it/s]
+2026-03-11T19:49:04.237Z [engine_stderr] Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 2/2 [00:00<00:00, 18.13it/s]
+2026-03-11T19:49:04.237Z [engine_stderr] (EngineCore_DP0 pid=3733721)
+2026-03-11T19:49:04.321Z [engine_stderr] Capturing CUDA graphs (decode, FULL):   0%|          | 0/1 [00:00<?, ?it/s]
+2026-03-11T19:49:04.321Z [engine_stderr] Capturing CUDA graphs (decode, FULL): 100%|██████████| 1/1 [00:00<00:00, 11.92it/s]
+2026-03-11T19:49:04.499Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:04 [gpu_model_runner.py:5360] Graph capturing finished in 1 secs, took 0.04 GiB
+2026-03-11T19:49:04.511Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:04 [core.py:282] init engine (profile, create kv cache, warmup model) took 10.75 seconds
+2026-03-11T19:49:04.696Z [engine_stdout] (EngineCore_DP0 pid=3733721) INFO 03-11 13:49:04 [vllm.py:747] Asynchronous scheduling is enabled.
+2026-03-11T19:49:04.843Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:04 [api_server.py:495] Supported tasks: ['generate']
+2026-03-11T19:49:04.910Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:04 [logger.py:28] `--enable-log-requests` is set but the minimum log level is higher than DEBUG. Only limited information will be logged to minimize overhead. To view more details, set `VLLM_LOGGING_LEVEL=DEBUG`.
+2026-03-11T19:49:04.911Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:04 [serving.py:185] Warming up chat template processing...
+2026-03-11T19:49:06.666Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [hf.py:318] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+2026-03-11T19:49:06.680Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [serving.py:210] Chat template warmup completed in 1769.8ms
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [api_server.py:500] Starting vLLM API server 0 on http://127.0.0.1:40037
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:38] Available routes are:
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /openapi.json, Methods: GET, HEAD
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /docs, Methods: GET, HEAD
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /redoc, Methods: GET, HEAD
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /tokenize, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /detokenize, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /load, Methods: GET
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /version, Methods: GET
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /health, Methods: GET
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /metrics, Methods: GET
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/models, Methods: GET
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /ping, Methods: GET
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /ping, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /invocations, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/chat/completions, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/chat/completions/render, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/responses, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/responses/{response_id}, Methods: GET
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/responses/{response_id}/cancel, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/completions, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/completions/render, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/messages, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /v1/messages/count_tokens, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /inference/v1/generate, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /scale_elastic_ep, Methods: POST
+2026-03-11T19:49:06.681Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:06 [launcher.py:47] Route: /is_scaling_elastic_ep, Methods: POST
+2026-03-11T19:49:06.702Z [engine_stderr] (APIServer pid=3733512) INFO:     Started server process [3733512]
+2026-03-11T19:49:06.702Z [engine_stderr] (APIServer pid=3733512) INFO:     Waiting for application startup.
+2026-03-11T19:49:06.865Z [engine_stderr] (APIServer pid=3733512) INFO:     Application startup complete.
+2026-03-11T19:49:07.141Z [engine_stdout] (APIServer pid=3733512) INFO:     127.0.0.1:45386 - "GET /v1/models HTTP/1.1" 200 OK
+2026-03-11T19:49:07.142Z [backend] backend_ready base_url=http://127.0.0.1:40037/v1 model=Qwen3.5-9B
+2026-03-11T19:49:34.445Z [transport] turn_start id=1 messages=2 model=Qwen3.5-9B max_new_tokens=8192
+2026-03-11T19:49:34.452Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:34 [logger.py:63] Received request chatcmpl-93f76330b1e95369: params: SamplingParams(n=1, presence_penalty=0.0, frequency_penalty=0.0, repetition_penalty=1.0, temperature=0.7, top_p=1.0, top_k=0, min_p=0.0, seed=None, stop=[], stop_token_ids=[], bad_words=[], include_stop_str_in_output=False, ignore_eos=False, max_tokens=8192, min_tokens=0, logprobs=None, prompt_logprobs=None, skip_special_tokens=True, spaces_between_special_tokens=True, structured_outputs=None, extra_args=None), lora_request: None.
+2026-03-11T19:49:34.455Z [engine_stdout] (APIServer pid=3733512) INFO:     127.0.0.1:49112 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+2026-03-11T19:49:34.459Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:34 [async_llm.py:421] Added request chatcmpl-93f76330b1e95369-af2181a2.
+2026-03-11T19:49:46.865Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:46 [loggers.py:259] Engine 000: Avg prompt throughput: 32.7 tokens/s, Avg generation throughput: 9.6 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 2.6%, Prefix cache hit rate: 0.0%
+2026-03-11T19:49:47.831Z [transport] turn_finish id=1 elapsed_s=13.386 think_chars=495 answer_chars=161
+2026-03-11T19:49:56.865Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:49:56 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 5.4 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+2026-03-11T19:50:06.866Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:50:06 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+2026-03-11T19:51:17.943Z [engine_stdout] (APIServer pid=3733512) INFO 03-11 13:51:17 [launcher.py:122] Shutting down FastAPI HTTP server.
+2026-03-11T19:51:18.022Z [engine_stderr] [rank0]:[W311 13:51:18.764746765 ProcessGroupNCCL.cpp:1553] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+2026-03-11T19:51:18.484Z [engine_stderr] (APIServer pid=3733512) INFO:     Shutting down
+2026-03-11T19:51:18.584Z [engine_stderr] (APIServer pid=3733512) INFO:     Waiting for application shutdown.
+2026-03-11T19:51:18.584Z [engine_stderr] (APIServer pid=3733512) INFO:     Application shutdown complete.
+2026-03-11T19:52:17.259Z [app] launch_argv: vllm serve /home/poop/ml/models/Qwen3.5-9B --host 127.0.0.1 --port 40937 --served-model-name Qwen3.5-9B --tensor-parallel-size 1 --gpu-memory-utilization 0.92 --max-model-len 32768 --generation-config vllm --attention-backend FLASH_ATTN --dtype bfloat16 --swap-space 0 --max-num-seqs 1 --enable-log-requests --enable-force-include-usage
+2026-03-11T19:52:21.226Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [utils.py:302]
+2026-03-11T19:52:21.226Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [utils.py:302]        █     █     █▄   ▄█
+2026-03-11T19:52:21.226Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.0
+2026-03-11T19:52:21.226Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [utils.py:302]   █▄█▀ █     █     █     █  model   /home/poop/ml/models/Qwen3.5-9B
+2026-03-11T19:52:21.226Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+2026-03-11T19:52:21.226Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [utils.py:302]
+2026-03-11T19:52:21.227Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [utils.py:238] non-default args: {'model_tag': '/home/poop/ml/models/Qwen3.5-9B', 'enable_force_include_usage': True, 'host': '127.0.0.1', 'port': 40937, 'model': '/home/poop/ml/models/Qwen3.5-9B', 'dtype': 'bfloat16', 'max_model_len': 32768, 'served_model_name': ['Qwen3.5-9B'], 'generation_config': 'vllm', 'attention_backend': 'FLASH_ATTN', 'gpu_memory_utilization': 0.92, 'swap_space': 0.0, 'max_num_seqs': 1, 'enable_log_requests': True}
+2026-03-11T19:52:21.231Z [engine_stderr] (APIServer pid=3736437) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_section', 'mrope_interleaved'}
+2026-03-11T19:52:21.232Z [engine_stderr] (APIServer pid=3736437) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_section', 'mrope_interleaved'}
+2026-03-11T19:52:21.233Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [model.py:531] Resolved architecture: Qwen3_5ForConditionalGeneration
+2026-03-11T19:52:21.233Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [model.py:1554] Using max model len 32768
+2026-03-11T19:52:21.292Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=2048.
+2026-03-11T19:52:21.455Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [config.py:544] Setting attention block size to 528 tokens to ensure that attention page size is >= mamba page size.
+2026-03-11T19:52:21.455Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [config.py:575] Padding mamba page size by 0.76% to ensure that mamba page size and attention page size are exactly equal.
+2026-03-11T19:52:21.456Z [engine_stdout] (APIServer pid=3736437) INFO 03-11 13:52:21 [vllm.py:747] Asynchronous scheduling is enabled.
+2026-03-11T19:52:23.541Z [engine_stderr] (APIServer pid=3736437) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_section', 'mrope_interleaved'}
+2026-03-11T19:52:23.542Z [engine_stderr] (APIServer pid=3736437) Unrecognized keys in `rope_parameters` for 'rope_type'='default': {'mrope_section', 'mrope_interleaved'}
+2026-03-11T19:52:29.776Z [engine_stdout] (APIServer pid=3736437) WARNING 03-11 13:52:29 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+2026-03-11T19:52:33.337Z [engine_stdout] (EngineCore_DP0 pid=3736632) INFO 03-11 13:52:33 [core.py:101] Initializing a V1 LLM engine (v0.17.0) with config: model='/home/poop/ml/models/Qwen3.5-9B', speculative_config=None, tokenizer='/home/poop/ml/models/Qwen3.5-9B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=32768, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-9B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'level': None, 'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [], 'compile_ranges_split_points': [2048], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 2, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+2026-03-11T19:52:33.406Z [engine_stdout] (EngineCore_DP0 pid=3736632) WARNING 03-11 13:52:33 [interface.py:472] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+2026-03-11T19:52:34.800Z [engine_stdout] (EngineCore_DP0 pid=3736632) INFO 03-11 13:52:34 [parallel_state.py:1393] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://172.26.0.43:45855 backend=nccl

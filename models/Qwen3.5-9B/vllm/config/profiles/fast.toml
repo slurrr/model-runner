@@ -1,0 +1,26 @@
+[gen]
+# Leave model/prompt/ui in base `default.toml`; this profile focuses on throughput.
+max_new_tokens = 8192
+
+[backend.vllm]
+# Fast profile philosophy:
+# - Keep `max_model_len` modest to reduce KV pressure.
+# - Avoid `--enforce-eager` to allow CUDA-graph/compilation paths when they work.
+extra_args = [
+  "--swap-space", "0",
+  "--max-num-seqs", "1",
+  "--max-num-batched-tokens", "16384",
+  "--stream-interval", "8",
+  "--enable-prefix-caching",
+  "--max-cudagraph-capture-size", "256",
+  "--kv-cache-dtype", "auto",
+  "--block-size", "32",
+  # If you want to hard-cap KV cache size instead of using gpu_memory_utilization:
+  # "--kv-cache-memory-bytes", "12G",
+  "--disable-log-stats",
+  # "--no-enable-log-requests",
+  "--disable-uvicorn-access-log",
+  "--enable-force-include-usage",  
+]
+gpu_memory_utilization = 0.92
+max_model_len = 16384

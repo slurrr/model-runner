@@ -13,7 +13,11 @@ import torch
 from jinja2 import Environment
 
 from tui_app.backends.base import EventEmitter
+from tui_app.context_policy import build_context_limit_error, trim_messages_to_budget
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnRecord, TurnStart
+from tui_app.history_control import append_assistant_history
+from tui_app.knobs import SUPPORTED_KNOBS, finalize_knob_report, unsupported_user_set
+from tui_app.log_file import FileLogger
 from tui_app.think_router import ThinkRouter
 
 
@@ -270,9 +274,10 @@ def apply_context_limit_exl2(
     *,
     max_seq_len: int,
     min_free_tokens: int,
-) -> tuple[torch.Tensor, list[dict[str, str]], str]:
-    trimmed = _sanitize_messages(messages)
-    while True:
+) -> tuple[torch.Tensor, list[dict[str, str]], str, dict[str, object]]:
+    sanitized = _sanitize_messages(messages)
+
+    def _measure(trimmed):
         prompt_text = render_chat_template(
             template_text,
             messages=trimmed,
@@ -283,18 +288,19 @@ def apply_context_limit_exl2(
         length = _count_tokens(input_ids)
         if length <= 0:
             raise RuntimeError("Tokenizer returned no input ids for rendered EXL2 prompt.")
-        if length <= max(1, max_seq_len - min_free_tokens):
-            return input_ids, trimmed, prompt_text
+        return length, (input_ids, prompt_text)
 
-        drop_idx = None
-        start_idx = 1 if trimmed and trimmed[0].get("role") == "system" else 0
-        for idx in range(start_idx, len(trimmed)):
-            if trimmed[idx].get("role") in {"user", "assistant", "tool"}:
-                drop_idx = idx
-                break
-        if drop_idx is None:
-            return input_ids, trimmed, prompt_text
-        trimmed.pop(drop_idx)
+    trimmed, _length, payload, report = trim_messages_to_budget(
+        sanitized,
+        measure_fn=_measure,
+        context_window=max_seq_len,
+        reserved_generation_tokens=min_free_tokens,
+        strategy="exact_preflight",
+    )
+    if not report.fit:
+        raise RuntimeError(build_context_limit_error(report))
+    input_ids, prompt_text = payload
+    return input_ids, trimmed, prompt_text, report.to_dict()
 
 
 def _try_import_exllamav2(exl2_repo_path: str | None):
@@ -339,13 +345,40 @@ class _Exl2Runtime:
 class EXL2Session:
     backend_name = "exl2"
 
-    def __init__(self, runtime: _Exl2Runtime, args: argparse.Namespace, resolved_model_id: str):
+    def __init__(
+        self,
+        runtime: _Exl2Runtime,
+        args: argparse.Namespace,
+        resolved_model_id: str,
+        template_info: dict[str, object] | None = None,
+        logger: FileLogger | None = None,
+    ):
         self.runtime = runtime
         self.args = args
         self.resolved_model_id = resolved_model_id
+        self.template_info = dict(template_info or {})
+        self.logger = logger
 
     def describe(self) -> dict[str, object]:
-        return dict(self.runtime.backend_info)
+        return {
+            "template_control_level": "local_template",
+            **dict(self.runtime.backend_info),
+            **self.template_info,
+        }
+
+    def close(self) -> None:
+        if self.logger is not None:
+            self.logger.close()
+
+    def get_recent_logs(self, n: int = 80, sources: list[str] | None = None) -> list[str]:
+        if self.logger is None:
+            return []
+        return self.logger.get_recent_logs(n=n, sources=sources)
+
+    def list_log_sources(self) -> list[str]:
+        if self.logger is None:
+            return []
+        return self.logger.list_log_sources()
 
     def _build_settings(self):
         from exllamav2.generator import ExLlamaV2Sampler
@@ -365,6 +398,12 @@ class EXL2Session:
     def generate_turn(self, turn_id: int, messages: list[dict[str, str]], emit: EventEmitter) -> None:
         emit(TurnStart(turn_id=turn_id))
         started = time.time()
+        if self.logger is not None:
+            self.logger.log(
+                f"turn_start id={turn_id} messages={len(messages)} max_new_tokens={self.args.max_new_tokens} "
+                f"max_seq_len={self.args.max_seq_len}",
+                source="backend",
+            )
         router = ThinkRouter(assume_think=self.args.assume_think)
         stage = "init"
 
@@ -386,7 +425,7 @@ class EXL2Session:
                     template_text = DEFAULT_TEMPLATE
 
             stage = "context_encode"
-            input_ids, trimmed_messages, prompt_text = apply_context_limit_exl2(
+            input_ids, trimmed_messages, prompt_text, context_report = apply_context_limit_exl2(
                 self.runtime.tokenizer,
                 template_text=template_text,
                 messages=messages,
@@ -395,14 +434,32 @@ class EXL2Session:
             )
             history_messages = list(trimmed_messages)
 
-            emit(Meta(turn_id=turn_id, key="prompt_tokens", value=_count_tokens(input_ids)))
-            emit(Meta(turn_id=turn_id, key="trimmed_messages_count", value=len(messages) - len(trimmed_messages)))
+            prompt_tokens = _count_tokens(input_ids)
+            emit(Meta(turn_id=turn_id, key="prompt_tokens", value=prompt_tokens))
 
             gen = self.runtime.generator
             settings = self._build_settings()
             stop_conditions = _build_stop_conditions(self.runtime.tokenizer, self.args)
             if stop_conditions:
                 gen.set_stop_conditions(stop_conditions)
+            knob_sent = {
+                "max_new_tokens": self.args.max_new_tokens,
+                "temperature": settings.temperature,
+                "top_p": settings.top_p,
+                "top_k": settings.top_k,
+                "min_p": settings.min_p,
+                "typical_p": settings.typical,
+                "repetition_penalty": settings.token_repetition_penalty,
+                "frequency_penalty": settings.token_frequency_penalty,
+                "presence_penalty": settings.token_presence_penalty,
+            }
+            if self.args.stop_strings:
+                knob_sent["stop_strings"] = list(self.args.stop_strings)
+            knob_report = finalize_knob_report(
+                sent=knob_sent,
+                supported=SUPPORTED_KNOBS["exl2"],
+                ignored=unsupported_user_set(self.args, "exl2"),
+            )
 
             stage = "begin_stream"
             gen.begin_stream_ex(input_ids, settings)
@@ -418,7 +475,10 @@ class EXL2Session:
                 eos = bool(res.get("eos"))
                 token_ids = res.get("chunk_token_ids")
                 ids = _iter_token_ids(token_ids)
-                generated_tokens += len(ids) if ids else _count_tokens(token_ids)
+                token_inc = len(ids) if ids else _count_tokens(token_ids)
+                generated_tokens += token_inc
+                if token_inc > 0:
+                    emit(Meta(turn_id=turn_id, key="generated_tokens_inc", value=token_inc))
 
                 repeat_limit = int(getattr(self.args, "exl2_repeat_streak_max", 64) or 0)
                 if repeat_limit > 0 and ids:
@@ -477,6 +537,8 @@ class EXL2Session:
                     emit(Meta(turn_id=turn_id, key="context_restarts", value=context_restarts))
 
         except Exception as exc:
+            if self.logger is not None:
+                self.logger.log(f"turn_error id={turn_id} stage={stage} error={exc}", source="backend")
             emit(Error(turn_id=turn_id, message=f"{stage}: {exc}"))
             return
 
@@ -489,10 +551,19 @@ class EXL2Session:
                 emit(AnswerDelta(turn_id=turn_id, text=text))
 
         ended = time.time()
+        completion_tokens = int(generated_tokens)
+        total_tokens = int(prompt_tokens) + completion_tokens
+        emit(Meta(turn_id=turn_id, key="completion_tokens", value=completion_tokens))
+        emit(Meta(turn_id=turn_id, key="total_tokens", value=total_tokens))
+        elapsed = max(0.0, ended - started)
+        throughput = None
+        if completion_tokens > 0 and elapsed > 0:
+            throughput = {"tokens_per_s": completion_tokens / elapsed}
+        answer_text = "".join(answer_parts)
         record = TurnRecord(
             raw="".join(raw_parts),
             think="".join(think_parts),
-            answer="".join(answer_parts).strip(),
+            answer=answer_text,
             ended_in_think=(router.mode == "think"),
             backend=self.backend_name,
             model_id=self.resolved_model_id,
@@ -505,10 +576,29 @@ class EXL2Session:
                 "typical_p": self.args.typical_p,
                 "repetition_penalty": self.args.repetition_penalty,
             },
-            timing={"start": started, "end": ended, "elapsed": max(0.0, ended - started)},
-            trimmed_messages=history_messages,
+            timing={"start": started, "end": ended, "elapsed": elapsed},
+            token_counts={
+                "prompt_tokens": int(prompt_tokens),
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens,
+            },
+            throughput=throughput,
+            knobs=knob_report,
+            context=context_report,
+            trimmed_messages=append_assistant_history(
+                list(history_messages),
+                think="".join(think_parts),
+                answer=answer_text,
+                strip_think=bool(self.args.history_strip_think),
+            ),
         )
         emit(Finish(turn_id=turn_id, record=record))
+        if self.logger is not None:
+            self.logger.log(
+                f"turn_finish id={turn_id} elapsed_s={record.timing.get('elapsed', 0):.3f} "
+                f"think_chars={len(record.think)} answer_chars={len(record.answer)}",
+                source="backend",
+            )
 
 
 def _parse_size_to_bytes(value: str, unit: str) -> int:
@@ -611,6 +701,11 @@ def _effective_attention_target(config, caps: dict[str, object]) -> str:
 
 
 def create_session(args: argparse.Namespace) -> EXL2Session:
+    logger = FileLogger.from_value(
+        getattr(args, "exl2_log_file", ""),
+        "backend",
+        config_path=getattr(args, "_config_path", None),
+    )
     model_dir = resolve_exl2_model_dir(
         args.model_id,
         model_path=getattr(args, "model_path", None),
@@ -622,6 +717,8 @@ def create_session(args: argparse.Namespace) -> EXL2Session:
             f"EXL2 model_dir not found: {model_dir} "
             "(set model_id to full path, or set model_path/exl2_repo_path to a base directory containing the model folder)"
         )
+    if logger is not None:
+        logger.log(f"session_init model_dir={model_dir}", source="app")
 
     try:
         _try_import_exllamav2(getattr(args, "exl2_repo_path", None))
@@ -748,4 +845,27 @@ def create_session(args: argparse.Namespace) -> EXL2Session:
             "sdpa_available": caps.get("sdpa_available"),
         })(_query_attention_capabilities()),
     )
-    return EXL2Session(runtime=runtime, args=args, resolved_model_id=model_dir)
+    if logger is not None:
+        logger.log(
+            "attention_runtime="
+            f"{runtime.backend_info.get('attention_backend_runtime')} "
+            f"attention_effective={runtime.backend_info.get('attention_backend_effective')}",
+            source="app",
+        )
+    requested_template = (args.chat_template or "").strip()
+    template_requested_value = requested_template
+    if requested_template:
+        try:
+            candidate = resolve_path_maybe_relative(requested_template, config_path=getattr(args, "_config_path", None))
+            if os.path.isfile(candidate):
+                template_requested_value = candidate
+        except Exception:
+            pass
+    template_info = {
+        "chat_template_requested": template_requested_value,
+        "chat_template_applied": bool(requested_template and args.prompt_mode != "plain"),
+        "chat_template_reason": (
+            "applied" if requested_template and args.prompt_mode != "plain" else ("ignored_prompt_mode" if requested_template else "empty_default")
+        ),
+    }
+    return EXL2Session(runtime=runtime, args=args, resolved_model_id=model_dir, template_info=template_info, logger=logger)
