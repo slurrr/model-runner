@@ -1,0 +1,528 @@
+[
+  {
+    "type": "Title",
+    "result": {
+      "userId": 1000,
+      "userName": "poop",
+      "fullUserName": ",,,",
+      "hostName": "DESKTOP-MDLU7UA",
+      "homeDir": "/home/poop/",
+      "exePath": "/usr/bin/fastfetch",
+      "userShell": "/bin/bash",
+      "pid": 14295,
+      "cwd": "/home/poop/projects/agentmux/"
+    }
+  },
+  {
+    "type": "Separator",
+    "error": "Unsupported for JSON format"
+  },
+  {
+    "type": "OS",
+    "result": {
+      "buildID": "",
+      "codename": "jammy",
+      "id": "ubuntu",
+      "idLike": "debian",
+      "name": "Ubuntu",
+      "prettyName": "Ubuntu 22.04.2 LTS (Jammy Jellyfish)",
+      "variant": "",
+      "variantID": "",
+      "version": "22.04.2 LTS (Jammy Jellyfish)",
+      "versionID": "22.04"
+    }
+  },
+  {
+    "type": "Host",
+    "result": {
+      "family": "WSL",
+      "name": "Windows Subsystem for Linux - Ubuntu",
+      "version": "2.6.3.0",
+      "sku": "",
+      "vendor": "Microsoft Corporation",
+      "serial": "",
+      "uuid": ""
+    }
+  },
+  {
+    "type": "Kernel",
+    "result": {
+      "architecture": "x86_64",
+      "name": "Linux",
+      "release": "6.6.87.2-microsoft-standard-WSL2",
+      "version": "#1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025",
+      "pageSize": 4096
+    }
+  },
+  {
+    "type": "Uptime",
+    "result": {
+      "uptime": 1009529960,
+      "bootTime": "2026-03-07T15:58:18.475-0700"
+    }
+  },
+  {
+    "type": "Packages",
+    "result": {
+      "all": 1246,
+      "amSystem": 0,
+      "amUser": 0,
+      "apk": 0,
+      "brew": 59,
+      "brewCask": 0,
+      "choco": 0,
+      "dpkg": 1181,
+      "emerge": 0,
+      "eopkg": 0,
+      "flatpakSystem": 0,
+      "flatpakUser": 0,
+      "guixSystem": 0,
+      "guixUser": 0,
+      "guixHome": 0,
+      "hpkgSystem": 0,
+      "hpkgUser": 0,
+      "kiss": 0,
+      "linglong": 0,
+      "macports": 0,
+      "mport": 0,
+      "moss": 0,
+      "nixDefault": 0,
+      "nixSystem": 0,
+      "nixUser": 0,
+      "opkg": 0,
+      "pacman": 0,
+      "pacstall": 0,
+      "paludis": 0,
+      "pisi": 0,
+      "pkg": 0,
+      "pkgtool": 0,
+      "pkgsrc": 0,
+      "rpm": 0,
+      "scoopUser": 0,
+      "scoopGlobal": 0,
+      "snap": 6,
+      "soar": 0,
+      "sorcery": 0,
+      "winget": 0,
+      "xbps": 0,
+      "pacmanBranch": ""
+    }
+  },
+  {
+    "type": "Shell",
+    "result": {
+      "exe": "bash",
+      "exeName": "bash",
+      "exePath": "/usr/bin/bash",
+      "pid": 89137,
+      "ppid": 89133,
+      "processName": "bash",
+      "prettyName": "bash",
+      "version": "5.1.16",
+      "tty": 66
+    }
+  },
+  {
+    "type": "Display",
+    "result": [
+      {
+        "id": 206920770674,
+        "name": "rdp-0",
+        "primary": false,
+        "output": {
+          "width": 3840,
+          "height": 2160,
+          "refreshRate": 60.0,
+          "drrStatus": null
+        },
+        "scaled": {
+          "width": 3840,
+          "height": 2160
+        },
+        "preferred": {
+          "width": 3840,
+          "height": 2160,
+          "refreshRate": 60.0
+        },
+        "physical": {
+          "width": 0,
+          "height": 0
+        },
+        "rotation": 0,
+        "bitDepth": 0,
+        "hdrStatus": null,
+        "type": "Unknown",
+        "manufactureDate": null,
+        "serial": null,
+        "platformApi": "wayland-global"
+      }
+    ]
+  },
+  {
+    "type": "DE",
+    "error": "No DE found"
+  },
+  {
+    "type": "WM",
+    "result": {
+      "processName": "WSLg",
+      "prettyName": "WSLg",
+      "protocolName": "Wayland",
+      "pluginName": "",
+      "version": "1.0.71"
+    }
+  },
+  {
+    "type": "WMTheme",
+    "error": "Unknown WM: WSLg"
+  },
+  {
+    "type": "Theme",
+    "result": {
+      "theme1": "",
+      "theme2": "Yaru [GTK3]"
+    }
+  },
+  {
+    "type": "Icons",
+    "result": {
+      "icons1": "",
+      "icons2": "Yaru [GTK3]"
+    }
+  },
+  {
+    "type": "Font",
+    "error": "No fonts found"
+  },
+  {
+    "type": "Cursor",
+    "error": "WSLg uses native windows cursor"
+  },
+  {
+    "type": "Terminal",
+    "result": {
+      "processName": "Windows Terminal",
+      "exe": "Windows Terminal",
+      "exeName": "Windows Terminal",
+      "exePath": "",
+      "pid": 0,
+      "ppid": 0,
+      "prettyName": "Windows Terminal",
+      "version": "",
+      "tty": ""
+    }
+  },
+  {
+    "type": "TerminalFont",
+    "error": "Unknown terminal: Windows Terminal"
+  },
+  {
+    "type": "CPU",
+    "result": {
+      "cpu": "13th Gen Intel(R) Core(TM) i9-13900K",
+      "vendor": "GenuineIntel",
+      "packages": 1,
+      "cores": {
+        "physical": 16,
+        "logical": 32,
+        "online": 32
+      },
+      "frequency": {
+        "base": 2995,
+        "max": 0
+      },
+      "coreTypes": [],
+      "temperature": null,
+      "march": "x86_64-v3",
+      "numaNodes": 1
+    }
+  },
+  {
+    "type": "GPU",
+    "result": [
+      {
+        "index": null,
+        "coreCount": null,
+        "coreUsage": null,
+        "memory": {
+          "dedicated": {
+            "total": 25310527488,
+            "used": null
+          },
+          "shared": {
+            "total": 34196840448,
+            "used": null
+          },
+          "type": null
+        },
+        "driver": "32.0.15.9174",
+        "name": "NVIDIA GeForce RTX 4090",
+        "temperature": null,
+        "type": "Discrete",
+        "vendor": "NVIDIA",
+        "platformApi": "DXCore",
+        "frequency": null,
+        "deviceId": 9223372043527772130
+      },
+      {
+        "index": null,
+        "coreCount": null,
+        "coreUsage": null,
+        "memory": {
+          "dedicated": {
+            "total": 134217728,
+            "used": null
+          },
+          "shared": {
+            "total": 34196840448,
+            "used": null
+          },
+          "type": null
+        },
+        "driver": "32.0.101.6129",
+        "name": "Intel(R) UHD Graphics 770",
+        "temperature": null,
+        "type": "Integrated",
+        "vendor": "Intel",
+        "platformApi": "DXCore",
+        "frequency": null,
+        "deviceId": 9223372036864919049
+      }
+    ]
+  },
+  {
+    "type": "Memory",
+    "result": {
+      "total": 33489530880,
+      "used": 17566490624
+    }
+  },
+  {
+    "type": "Swap",
+    "result": [
+      {
+        "name": "/dev/sdc",
+        "used": 3775799296,
+        "total": 8589934592
+      }
+    ]
+  },
+  {
+    "type": "Disk",
+    "result": [
+      {
+        "bytes": {
+          "available": 600371486720,
+          "free": 655363842048,
+          "total": 1081101176832,
+          "used": 425737334784
+        },
+        "files": {
+          "total": 67108864,
+          "used": 1154056
+        },
+        "filesystem": "ext4",
+        "mountpoint": "/",
+        "mountFrom": "/dev/sdd",
+        "name": "",
+        "volumeType": [
+          "Regular"
+        ],
+        "createTime": "2023-05-18T16:08:38.000-0600"
+      },
+      {
+        "bytes": {
+          "available": 120648065024,
+          "free": 120648065024,
+          "total": 999212183552,
+          "used": 878564118528
+        },
+        "files": {
+          "total": null,
+          "used": null
+        },
+        "filesystem": "9p",
+        "mountpoint": "/mnt/c",
+        "mountFrom": "C:\\",
+        "name": "",
+        "volumeType": [
+          "Regular"
+        ],
+        "createTime": null
+      },
+      {
+        "bytes": {
+          "available": 1324152971264,
+          "free": 1324152971264,
+          "total": 2000382062592,
+          "used": 676229091328
+        },
+        "files": {
+          "total": null,
+          "used": null
+        },
+        "filesystem": "9p",
+        "mountpoint": "/mnt/d",
+        "mountFrom": "D:\\",
+        "name": "",
+        "volumeType": [
+          "Regular"
+        ],
+        "createTime": null
+      },
+      {
+        "bytes": {
+          "available": 600371486720,
+          "free": 655363842048,
+          "total": 1081101176832,
+          "used": 425737334784
+        },
+        "files": {
+          "total": 67108864,
+          "used": 1154056
+        },
+        "filesystem": "ext4",
+        "mountpoint": "/mnt/wsl/docker-desktop-bind-mounts/Ubuntu/33b96756f091cb663c2b495b391ca25ca7c682c3e72b6b855cbed8c20816e98b",
+        "mountFrom": "/dev/sdd",
+        "name": "",
+        "volumeType": [
+          "Subvolume"
+        ],
+        "createTime": "2026-02-20T23:22:19.613-0700"
+      },
+      {
+        "bytes": {
+          "available": 600371486720,
+          "free": 655363842048,
+          "total": 1081101176832,
+          "used": 425737334784
+        },
+        "files": {
+          "total": 67108864,
+          "used": 1154056
+        },
+        "filesystem": "ext4",
+        "mountpoint": "/mnt/wsl/docker-desktop-bind-mounts/Ubuntu/58facffa7a12adeadf090f2a6f60e860c66e6feeec7038d6cbf2200933f4d0af",
+        "mountFrom": "/dev/sdd",
+        "name": "",
+        "volumeType": [
+          "Subvolume"
+        ],
+        "createTime": "2026-03-14T11:32:12.261-0600"
+      },
+      {
+        "bytes": {
+          "available": 600371486720,
+          "free": 655363842048,
+          "total": 1081101176832,
+          "used": 425737334784
+        },
+        "files": {
+          "total": 67108864,
+          "used": 1154056
+        },
+        "filesystem": "ext4",
+        "mountpoint": "/mnt/wsl/docker-desktop-bind-mounts/Ubuntu/a493b6793413e8bcd32e1716a662a70f080eba57ee8c88e5c2c27b03212a4ed1",
+        "mountFrom": "/dev/sdd",
+        "name": "",
+        "volumeType": [
+          "Subvolume"
+        ],
+        "createTime": "2026-03-13T14:39:40.969-0600"
+      },
+      {
+        "bytes": {
+          "available": 57313280,
+          "free": 68396032,
+          "total": 142625792,
+          "used": 74229760
+        },
+        "files": {
+          "total": 38608,
+          "used": 836
+        },
+        "filesystem": "ext4",
+        "mountpoint": "/mnt/wsl/docker-desktop/docker-desktop-user-distro",
+        "mountFrom": "/dev/sde",
+        "name": "",
+        "volumeType": [
+          "Regular"
+        ],
+        "createTime": "2026-02-05T22:56:43.000-0700"
+      },
+      {
+        "bytes": {
+          "available": 600371486720,
+          "free": 655363842048,
+          "total": 1081101176832,
+          "used": 425737334784
+        },
+        "files": {
+          "total": 67108864,
+          "used": 1154056
+        },
+        "filesystem": "ext4",
+        "mountpoint": "/mnt/wslg/distro",
+        "mountFrom": "/dev/sdd",
+        "name": "",
+        "volumeType": [
+          "Subvolume",
+          "Read-only"
+        ],
+        "createTime": "2023-05-18T16:08:38.000-0600"
+      },
+      {
+        "bytes": {
+          "available": 600371486720,
+          "free": 655363842048,
+          "total": 1081101176832,
+          "used": 425737334784
+        },
+        "files": {
+          "total": 67108864,
+          "used": 1154056
+        },
+        "filesystem": "ext4",
+        "mountpoint": "/snap",
+        "mountFrom": "/dev/sdd",
+        "name": "",
+        "volumeType": [
+          "Subvolume"
+        ],
+        "createTime": "2023-05-18T16:08:38.992-0600"
+      }
+    ]
+  },
+  {
+    "type": "LocalIp",
+    "result": [
+      {
+        "name": "eth0",
+        "defaultRoute": {
+          "ipv4": true
+        },
+        "ipv4": "172.26.0.43/20"
+      }
+    ]
+  },
+  {
+    "type": "Battery",
+    "result": []
+  },
+  {
+    "type": "PowerAdapter",
+    "result": []
+  },
+  {
+    "type": "Locale",
+    "result": "C.UTF-8"
+  },
+  {
+    "type": "Break",
+    "error": "Unsupported for JSON format"
+  },
+  {
+    "type": "Colors",
+    "error": "Unsupported for JSON format"
+  }
+]

@@ -32,7 +32,7 @@ What it does:
 What it does:
 - Increases `max_model_len` (`32768`) and KV reservation (via `gpu_memory_utilization`).
 - Enables chunked prefill to make long prompts less painful.
-- Keeps `swap-space=0` so “fits or fails” on VRAM only.
+- Leaves CPU offload disabled so it “fits or fails” on VRAM only.
 
 ## Knobs (what they do + what to try)
 
@@ -99,7 +99,7 @@ What it does:
 - Context sweep:
   1) raise `max_model_len` in steps: `16384 → 32768 → 49152 → 65536`
   2) raise `gpu_memory_utilization` gradually (`0.92 → 0.96 → 0.98`)
-  3) keep `swap-space=0` so failures are obvious
+  3) keep CPU offload disabled so failures are obvious
 
 ## Gotchas
 - Only set `gen.truncate_prompt_tokens` if you intentionally want vLLM to truncate your prompt; an overly-aggressive value can lead to

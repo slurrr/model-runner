@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import os
 import re
 import signal
@@ -15,8 +16,9 @@ from tui_app.backends.gguf import create_session as create_gguf_session
 from tui_app.backends.hf import create_session as create_hf_session
 from tui_app.backends.ollama import create_session as create_ollama_session
 from tui_app.backends.openai import create_session as create_openai_session
-from tui_app.backends.vllm import create_session as create_vllm_session, shutdown_managed_server
+from tui_app.backends.vllm import create_session as create_vllm_session, list_managed_servers, shutdown_managed_server
 from tui_app.telemetry import TelemetryContext, attach_log_subscribers
+from tui_app.transports.openai_http import normalize_openai_base_url, resolve_model_once
 
 
 def normalize_windows_path(raw: str) -> str:
@@ -36,6 +38,8 @@ def detect_backend(model: str | None, backend_override: str | None) -> str:
         return "hf"
 
     normalized = normalize_windows_path(model)
+    if normalized.startswith("attach:"):
+        return "vllm"
     if normalized.startswith("ollama:"):
         return "ollama"
     if normalized.startswith("openai:"):
@@ -144,6 +148,141 @@ def _infer_backend_from_default_config(model: str) -> str | None:
     return None
 
 
+def _normalize_cli_argv(raw_argv: list[str]) -> list[str]:
+    argv = list(raw_argv)
+    if len(argv) >= 2 and argv[0] == "attach":
+        selector = argv[1].strip()
+        rest = argv[2:]
+        if re.match(r"^(vllm|openai|ollama|hf|gguf|exl2)-.+-\d+$", selector) and not selector.startswith("attach:"):
+            selector = f"attach:{selector}"
+        return [selector, *rest]
+    if argv and not argv[0].startswith("-"):
+        selector = argv[0].strip()
+        if re.match(r"^(vllm|openai|ollama|hf|gguf|exl2)-.+-\d+$", selector) and not selector.startswith("attach:"):
+            argv[0] = f"attach:{selector}"
+    return argv
+
+
+def _repo_root() -> str:
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _slug_path_part(value: str, fallback: str) -> str:
+    text = (value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9._-]+", "-", text)
+    text = re.sub(r"-{2,}", "-", text)
+    text = text.strip("-._")
+    return text or fallback
+
+
+def _attach_selector(entry: dict[str, object]) -> str:
+    kind = _slug_path_part(str(entry.get("kind") or "backend"), "backend")
+    model = _slug_path_part(str(entry.get("resolved_model_id") or entry.get("label") or "backend"), "backend")
+    port = str(entry.get("port") or "na")
+    return f"attach:{kind}-{model}-{port}"
+
+
+def _discover_vllm_attachable_backends() -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+    seen_urls: set[str] = set()
+
+    def _add(
+        base_url: str,
+        *,
+        label: str,
+        source: str,
+        pid: int | None = None,
+        control_file: str = "",
+        require_model_match: bool = False,
+    ) -> None:
+        normalized_url = normalize_openai_base_url(base_url)
+        if not normalized_url or normalized_url in seen_urls:
+            return
+        try:
+            resolved_model_id = resolve_model_once(normalized_url, timeout_s=2.0, api_key="")
+        except Exception:
+            return
+        if require_model_match:
+            expected = _slug_path_part(label, "")
+            resolved = _slug_path_part(resolved_model_id, "")
+            if expected and resolved and expected != resolved:
+                return
+        seen_urls.add(normalized_url)
+        port_match = re.search(r":(\d+)(?:/v1)?$", normalized_url)
+        port = int(port_match.group(1)) if port_match else 0
+        entry: dict[str, object] = {
+            "kind": "vllm",
+            "backend": "openai",
+            "base_url": normalized_url,
+            "resolved_model_id": resolved_model_id,
+            "label": label or resolved_model_id,
+            "source": source,
+            "pid": int(pid or 0) or None,
+            "control_file": control_file,
+            "port": port or None,
+        }
+        entry["selector"] = _attach_selector(entry)
+        entries.append(entry)
+
+    for row in list_managed_servers():
+        _add(
+            str(row.get("base_url") or ""),
+            label=str(row.get("resolved_model_id") or row.get("model_id") or ""),
+            source=str(row.get("control_file") or row.get("display_path") or "state"),
+            pid=int(row.get("pid") or 0) or None,
+            control_file=str(row.get("control_file") or ""),
+        )
+
+    for cfg_path in sorted(glob.glob(os.path.join(_repo_root(), "models", "*", "vllm", "config", "default.toml"))):
+        try:
+            merged, meta = load_config_layers(cfg_path, backend="vllm", include_machine=True)
+        except Exception:
+            continue
+        host = str(merged.get("vllm_host") or "127.0.0.1").strip()
+        port = int(merged.get("vllm_port") or 0)
+        base_url = ""
+        if port > 0:
+            base_url = f"http://{host}:{port}"
+        else:
+            base_url = str(merged.get("vllm_base_url") or "").strip()
+        if not base_url:
+            continue
+        label = str(merged.get("vllm_served_model_name") or merged.get("model_id") or os.path.basename(os.path.dirname(os.path.dirname(cfg_path)))).strip()
+        _add(base_url, label=label, source=str(meta.get("base") or cfg_path), require_model_match=True)
+
+    entries.sort(key=lambda item: (str(item.get("kind") or ""), str(item.get("label") or ""), str(item.get("base_url") or "")))
+    return entries
+
+
+def _resolve_attachable_backend(selector: str) -> dict[str, object] | None:
+    normalized = (selector or "").strip()
+    for entry in _discover_vllm_attachable_backends():
+        if str(entry.get("selector") or "") == normalized:
+            return entry
+    return None
+
+
+def _print_attachable_backends() -> None:
+    entries = _discover_vllm_attachable_backends()
+    if not entries:
+        print("No active attachable backends.")
+        return
+    print("Active attachable backends:")
+    for entry in entries:
+        selector = str(entry.get("selector") or "").strip()
+        model = str(entry.get("resolved_model_id") or entry.get("label") or "").strip() or "(unknown)"
+        base_url = str(entry.get("base_url") or "").strip() or "(unknown)"
+        backend = str(entry.get("kind") or "backend")
+        pid = int(entry.get("pid") or 0)
+        source = str(entry.get("source") or "").strip()
+        extras = [f"backend={backend}", f"model={model}", f"url={base_url}"]
+        if pid:
+            extras.append(f"pid={pid}")
+        if source:
+            extras.append(f"source={source}")
+        print(f"{selector}\t" + "\t".join(extras))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Unified Textual TUI for HF + GGUF + Ollama + EXL2 + OpenAI-compatible + managed vLLM backends"
@@ -156,6 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional backend shorthand (e.g. `tui Qwen3.5-9B hf`).",
     )
     parser.add_argument("--backend", choices=["hf", "gguf", "ollama", "exl2", "openai", "vllm"], default=None)
+    parser.add_argument("-ls", "--list", action="store_true", help="List active attachable backends (vLLM first).")
     parser.add_argument("--config", default="", help="Config path or name.")
     parser.add_argument("--profile", default="", help="Optional profile name (loads config/profiles/<name>.toml).")
     parser.add_argument("--backend-only", action="store_true", help="Start backend only without the TUI (vLLM managed only).")
@@ -237,7 +377,7 @@ def build_parser() -> argparse.ArgumentParser:
     think_mode_group.add_argument("--assume-think", dest="assume_think", action="store_true")
     think_mode_group.add_argument("--no-assume-think", dest="assume_think", action="store_false")
 
-    parser.add_argument("--scroll-lines", type=int, default=1)
+    parser.add_argument("--scroll-lines", type=int, default=9)
     parser.add_argument("--ui-tick-ms", type=int, default=33)
     parser.add_argument("--ui-max-events-per-tick", type=int, default=120)
     parser.add_argument("--capture-last-request", action="store_true")
@@ -747,16 +887,18 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
 
 
 def parse_args() -> argparse.Namespace:
-    raw_argv = sys.argv[1:]
+    raw_argv = _normalize_cli_argv(sys.argv[1:])
     cli_overrides = _detect_cli_overrides(raw_argv)
 
     pre = argparse.ArgumentParser(add_help=False)
     pre.add_argument("model_id", nargs="?")
     pre.add_argument("backend_hint", nargs="?", choices=["hf", "gguf", "ollama", "exl2", "openai", "vllm"])
     pre.add_argument("--backend", choices=["hf", "gguf", "ollama", "exl2", "openai", "vllm"], default=None)
+    pre.add_argument("-ls", "--list", action="store_true")
+    pre.add_argument("--shutdown-backend", action="store_true")
     pre.add_argument("--config", default="")
     pre.add_argument("--profile", default="")
-    pre_args, _ = pre.parse_known_args()
+    pre_args, _ = pre.parse_known_args(raw_argv)
 
     backend_override = pre_args.backend or pre_args.backend_hint
     backend = detect_backend(pre_args.model_id, backend_override)
@@ -793,7 +935,7 @@ def parse_args() -> argparse.Namespace:
     if defaults:
         parser.set_defaults(**defaults)
 
-    args = parser.parse_args()
+    args = parser.parse_args(raw_argv)
     args._cli_overrides = cli_overrides
     args._config_keys = set(defaults.keys())
     args._config_profile = pre_args.profile or ""
@@ -814,6 +956,27 @@ def parse_args() -> argparse.Namespace:
             model_path=args.model_path,
             config_path=config_path,
         )
+    if args.list:
+        args.backend = "openai"
+        args.model_id = args.model_id or ""
+        args._config_path = config_path
+        return args
+    attach_entry = None
+    if isinstance(args.model_id, str) and args.model_id.startswith("attach:"):
+        attach_entry = _resolve_attachable_backend(args.model_id)
+        if attach_entry is None:
+            parser.error(f"Unknown attach selector: {args.model_id}. Run `tui --list`.")
+        args.backend = "openai"
+        args.openai_base_url = str(attach_entry.get("base_url") or "")
+        args.model_id = str(attach_entry.get("resolved_model_id") or "")
+        args._attach_entry = attach_entry
+        args._config_path = None
+        return args
+    if args.shutdown_backend and (args.backend or backend) == "vllm" and not args.model_id and not pre_args.config:
+        args.backend = "vllm"
+        args.model_id = ""
+        args._config_path = config_path
+        return args
     if not args.model_id and early_backend != "openai":
         args.model_id = defaults.get("model_id")
     if not args.model_id and early_backend != "openai":
@@ -907,6 +1070,10 @@ def main() -> None:
     session = None
     telemetry = None
 
+    if args.list:
+        _print_attachable_backends()
+        return
+
     if args.shutdown_backend:
         if args.backend != "vllm":
             print("--shutdown-backend is only supported for the managed vLLM backend.")
@@ -917,11 +1084,17 @@ def main() -> None:
             print(f"Failed to shut down managed vLLM backend: {exc}")
             sys.exit(1)
         if result.get("stopped"):
-            print(
-                "Managed vLLM stopped: "
-                f"pid={result.get('pid')} base_url={result.get('base_url')} control_file={result.get('control_file')}"
-            )
+            label = "Managed vLLM stopped" if result.get("control_file") else "vLLM stopped"
+            print(f"{label}: pid={result.get('pid')} base_url={result.get('base_url')} control_file={result.get('control_file')}")
             return
+        if result.get("reason") == "ambiguous":
+            print("Multiple active vLLM backends matched. Use --config or model_id to choose one:")
+            for entry in result.get("candidates") or []:
+                print(
+                    f"  pid={entry.get('pid')} base_url={entry.get('base_url')} "
+                    f"model={entry.get('resolved_model_id')} control_file={entry.get('control_file')}"
+                )
+            sys.exit(1)
         print(f"No managed vLLM stopped ({result.get('reason')}): control_file={result.get('control_file')}")
         return
 

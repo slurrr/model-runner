@@ -6,9 +6,9 @@ This repo intentionally has a few small “front door” scripts. Pick the one t
 
 Use `tui.py` when you want a terminal UI (scrollback, collapsible thinking, streaming) and/or you want to switch between backends with one command.
 
-Optional: install a console entrypoint so you can run `tui ...` instead of `python tui.py ...`:
+Recommended environment setup:
 ```bash
-pip install -e .
+uv sync --python 3.11
 ```
 
 What it supports:
@@ -19,23 +19,23 @@ What it supports:
 
 Examples:
 ```bash
-# HF (local folder under ~/ml/models/ or an HF id)
-tui Nanbeige4.1-3B
-python tui.py Nanbeige4.1-3B
-python tui.py --config Nanbeige4.1-3B
+# HF (local folder under ~/models/local/ or an HF id)
+uv run tui Nanbeige4.1-3B
+uv run python tui.py Nanbeige4.1-3B
+uv run python tui.py --config Nanbeige4.1-3B
 
 # GGUF (auto-detected by .gguf extension)
-tui /mnt/d/models/your-model.gguf
-python tui.py /mnt/d/models/your-model.gguf
+uv run tui ~/models/local/gguf/your-model.gguf
+uv run python tui.py ~/models/local/gguf/your-model.gguf
 
 # Ollama (explicit by scheme prefix)
-tui ollama:your-ollama-model
-python tui.py ollama:your-ollama-model
-python tui.py ollama:your-ollama-model --ollama-think false
+uv run tui ollama:your-ollama-model
+uv run python tui.py ollama:your-ollama-model
+uv run python tui.py ollama:your-ollama-model --ollama-think false
 
 # EXL2 (directory path is ambiguous with HF; use --backend)
-tui --backend exl2 /path/to/exl2_model_dir
-python tui.py --backend exl2 /path/to/exl2_model_dir
+uv run tui --backend exl2 /path/to/exl2_model_dir
+uv run python tui.py --backend exl2 /path/to/exl2_model_dir
 ```
 
 Notes:
@@ -64,6 +64,8 @@ Notes:
 - from inside the TUI:
   - `Ctrl+Q` or `/exit` leaves managed vLLM running
   - `/quit` shuts managed vLLM down
+- this Fedora machine should use the single repo `.venv` built manually with `uv venv .venv --python 3.12`
+- the managed launcher injects repo-local Torch and NVIDIA library directories automatically, so `./vllm-up` is the preferred path for Fedora serving checks
 
 Notes:
 - `tui_app/` is an internal package used by `tui.py` (don’t run `tui_app/app.py` directly).
@@ -72,7 +74,7 @@ Notes:
   - `*.gguf` → GGUF
   - existing directory → HF
   - otherwise → HF
-- When running under WSL, Windows paths like `D:\models\foo.gguf` are normalized to `/mnt/d/models/foo.gguf`.
+- This Fedora machine expects local assets under `~/models`, not WSL `/mnt/d/...` paths.
 
 ## HF CLI chat (template-aware)
 
@@ -80,8 +82,8 @@ Use `chat.py` when you want a simple terminal chat loop (no TUI) and you’re wo
 
 Examples:
 ```bash
-python chat.py Nanbeige4.1-3B
-python chat.py --config Nanbeige4.1-3B
+uv run python chat.py Nanbeige4.1-3B
+uv run python chat.py --config Nanbeige4.1-3B
 
 # Force plain prompting (no chat template)
 python chat.py Nanbeige4.1-3B --prompt-mode plain
@@ -98,10 +100,10 @@ Use `runner.py` when you want the most minimal “type prompt → get completion
 
 Examples:
 ```bash
-python runner.py Nanbeige4.1-3B
-python runner.py --config Nanbeige4.1-3B
-python runner.py Nanbeige4.1-3B -8bit
-python runner.py Nanbeige4.1-3B -4bit
+uv run python runner.py Nanbeige4.1-3B
+uv run python runner.py --config Nanbeige4.1-3B
+uv run python runner.py Nanbeige4.1-3B -8bit
+uv run python runner.py Nanbeige4.1-3B -4bit
 ```
 
 ## Backend-specific standalone scripts (non-TUI)
@@ -110,12 +112,12 @@ These are useful for isolating backend issues or doing quick checks without the 
 
 - `alex.py` (GGUF / llama.cpp chat CLI)
   ```bash
-  python alex.py /path/to/model.gguf
+  uv run python alex.py /path/to/model.gguf
   ```
 
 - `ollama_chat.py` (Ollama streaming CLI)
   ```bash
-  python ollama_chat.py your-ollama-model
+  uv run python ollama_chat.py your-ollama-model
   ```
 
 ## Legacy / experimental

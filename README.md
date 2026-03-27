@@ -43,6 +43,26 @@ What is still rough:
 If you want to just chat with models, the current tooling works.
 If you want to learn how backends really behave, optimize them, and compare them with confidence, the repo still needs a stronger observability layer.
 
+## Layout Philosophy
+
+This repo remains model-first for authored metadata, but machine assets now live outside the repo.
+
+- repo `models/` = config, notes, prompts, templates, compressor recipes
+- `~/models` = actual weights and quantized artifacts
+- `~/data/model-runner` = durable input datasets
+- `~/runs/model-runner` = telemetry, transcripts, logs, outputs, state
+
+Runtime artifacts should use logical run paths, not repo-path mirroring:
+
+- `~/runs/model-runner/logs/<backend>/<model>/<slot>/`
+- `~/runs/model-runner/state/<backend>/<model>/<slot>/`
+- `~/runs/model-runner/outputs/`
+- `~/runs/model-runner/telemetry/`
+- `~/runs/model-runner/transcripts/`
+
+See:
+- [docs/reference/local-layout.md](/home/poop/code/dev/model-runner/docs/reference/local-layout.md)
+
 ## Direction
 
 The direction is a **local model lab**, not “just a TUI.”
@@ -68,18 +88,28 @@ The current TUI should be thought of as:
 
 Use `tui.py` when you want a terminal UI for chat, streaming, thinking display, slash-command inspection, or fast backend switching.
 
-Optional: install the console entrypoint:
+Recommended environment setup:
 ```bash
-source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
+uv sync --python 3.12
 ```
+
+Optional backend groups:
+```bash
+uv pip install --python .venv/bin/python exllamav2
+uv pip install --python .venv/bin/python llama-cpp-python
+```
+
+Why the setup is serving-first:
+- the main repo environment is anchored on `vllm>=0.18`
+- the current Fedora target environment is a manual `uv` venv built around Python `3.12`, `vllm 0.18.0`, `torch 2.10.0+cu130`, `transformers 5.3.0`, and `huggingface_hub 1.7.2`
+- managed repo launchers prepend the repo-local Torch and NVIDIA runtime libraries automatically so `./vllm-up` works without shell-level `LD_LIBRARY_PATH` setup
+- released `llmcompressor` builds are currently incompatible with `vllm 0.18.x`, so compression is not part of the main sync
 
 Examples:
 ```bash
-tui Nanbeige4.1-3B
-python tui.py Nanbeige4.1-3B
-python tui.py --config Qwen3.5-9B --backend vllm
+.venv/bin/python tui.py Nanbeige4.1-3B
+.venv/bin/python tui.py --config Qwen3.5-9B --backend vllm
+.venv/bin/python -m vllm.entrypoints.cli.main serve --help
 ```
 
 ### Backend bring-up: managed vLLM helpers
@@ -131,16 +161,17 @@ python scripts/model add <model_name> <hf|gguf|ollama|exl2> [--id <backend_id>]
 
 ## Setup
 
-Use the repo venv:
+Use the repo `uv` environment:
 
 ```bash
-source .venv/bin/activate
-pip install -r requirements.txt
+uv sync --python 3.11
 ```
 
 Optional backend extras:
-- GGUF: `pip install llama-cpp-python`
+- GGUF: `uv sync --python 3.11 --group gguf`
 - EXL2: see [docs/exl2_setup.md](/home/poop/ml/model-runner/docs/exl2_setup.md)
+- EXL2 install: `uv sync --python 3.11 --group exl2`
+- Compression is currently out-of-band until a released `llmcompressor` version coexists with `vllm 0.18.x`
 
 ## Common Commands
 

@@ -7,11 +7,31 @@ name = "model-runner"
 version = "0.0.0"
 description = "Lightweight local model runner scripts (HF, GGUF, Ollama) with a unified Textual TUI."
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = []
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "jinja2>=3.1,<4",
+    "huggingface_hub>=1.7,<2",
+    "pynvml>=13,<14",
+    "rich>=14,<15",
+    "textual>=6,<9",
+    "transformers>=5,<6",
+    "vllm>=0.18,<0.19",
+]
 
 [project.scripts]
+model-runner = "tui:main"
 tui = "tui:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+]
+gguf = [
+    "llama-cpp-python>=0.3.16,<0.4",
+]
+exl2 = [
+    "exllamav2>=0.3.2,<0.4",
+]
 
 [tool.setuptools]
 py-modules = ["tui", "config_utils"]

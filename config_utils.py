@@ -4,6 +4,7 @@ import json
 import os
 import re
 import tomllib
+from pathlib import Path
 
 
 def _repo_root() -> str:
@@ -175,6 +176,97 @@ def _is_local_stem(model_id: str) -> bool:
     return True
 
 
+def _kebab_model_name(value: str) -> str:
+    text = (value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    text = re.sub(r"-{2,}", "-", text)
+    return text.strip("-")
+
+
+def _slug_path_part(value: str, fallback: str) -> str:
+    text = (value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9._-]+", "-", text)
+    text = re.sub(r"-{2,}", "-", text)
+    text = text.strip("-._")
+    return text or fallback
+
+
+def _existing_local_model_path(model_root: str, model_ref: str) -> str:
+    root = Path(os.path.expanduser(model_root))
+    if not root.is_dir():
+        return ""
+
+    candidates = [model_ref]
+    kebab = _kebab_model_name(model_ref)
+    if kebab and kebab not in candidates:
+        candidates.append(kebab)
+
+    for name in candidates:
+        path = root / name
+        if path.exists():
+            return str(path)
+
+    target_names = {name.casefold() for name in candidates if name}
+    if not target_names:
+        return ""
+    for child in root.iterdir():
+        if child.name.casefold() in target_names:
+            return str(child)
+    return ""
+
+
+def _latest_hf_snapshot_dir(hf_cache_dir: str, stem: str) -> str:
+    cache_root = Path(os.path.expanduser(hf_cache_dir))
+    if not cache_root.is_dir() or not stem:
+        return ""
+
+    # Accept either HF_HOME-style roots (.../models/hf) or direct hub cache roots
+    # (.../models/hf/hub).
+    if (cache_root / "hub").is_dir():
+        cache_root = cache_root / "hub"
+
+    repo_candidates = sorted(cache_root.glob(f"models--*--{stem}"))
+    best_path = ""
+    best_mtime = -1.0
+    for repo_dir in repo_candidates:
+        snapshots_dir = repo_dir / "snapshots"
+        if not snapshots_dir.is_dir():
+            continue
+        for snap_dir in snapshots_dir.iterdir():
+            if not snap_dir.is_dir():
+                continue
+            try:
+                mtime = snap_dir.stat().st_mtime
+            except OSError:
+                continue
+            if mtime > best_mtime:
+                best_mtime = mtime
+                best_path = str(snap_dir.resolve())
+    return best_path
+
+
+def _resolve_machine_model_ref(value: str, *, machine: dict) -> str:
+    model_ref = (value or "").strip()
+    if not _is_local_stem(model_ref):
+        return value
+
+    model_root = machine.get("model_root")
+    if isinstance(model_root, str) and model_root.strip():
+        local_path = _existing_local_model_path(model_root, model_ref)
+        if local_path:
+            return local_path
+
+    hf_cache_dir = machine.get("hf_cache_dir")
+    if isinstance(hf_cache_dir, str) and hf_cache_dir.strip():
+        snapshot_dir = _latest_hf_snapshot_dir(hf_cache_dir.strip(), model_ref)
+        if snapshot_dir:
+            return snapshot_dir
+
+    if isinstance(model_root, str) and model_root.strip():
+        return os.path.join(os.path.expanduser(model_root), model_ref)
+    return value
+
+
 def _apply_machine_overrides(data: dict, *, backend: str, machine_path: str) -> dict:
     if not os.path.isfile(machine_path):
         return dict(data)
@@ -202,10 +294,8 @@ def _apply_machine_overrides(data: dict, *, backend: str, machine_path: str) -> 
             return False
         return True
 
-    if isinstance(model_root, str) and model_root.strip() and isinstance(out.get("model_id"), str):
-        model_id = out["model_id"].strip()
-        if _is_local_stem(model_id):
-            out["model_id"] = os.path.join(os.path.expanduser(model_root), model_id)
+    if isinstance(out.get("model_id"), str):
+        out["model_id"] = _resolve_machine_model_ref(out["model_id"], machine=machine)
 
     if backend == "gguf":
         gguf_root = _clean_str(gguf_model_root) or _clean_str(model_root)
@@ -265,12 +355,70 @@ def apply_machine_model_root(model_id: str) -> str:
     machine = raw.get("machine")
     if not isinstance(machine, dict):
         return model_id
-    model_root = machine.get("model_root")
-    if not isinstance(model_root, str) or not model_root.strip():
-        return model_id
-    if not _is_local_stem(value):
-        return model_id
-    return os.path.join(os.path.expanduser(model_root), value)
+    return _resolve_machine_model_ref(value, machine=machine)
+
+
+def get_machine_value(key: str, default: str = "") -> str:
+    machine_path = os.path.join(_repo_root(), "config", "machine.toml")
+    if not os.path.isfile(machine_path):
+        return default
+    raw = _load_raw_config(machine_path)
+    machine = raw.get("machine")
+    if not isinstance(machine, dict):
+        return default
+    value = machine.get(key)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return default
+
+
+def get_machine_run_root(default: str = "~/runs/model-runner") -> str:
+    value = get_machine_value("run_root", default=default)
+    return os.path.abspath(os.path.expanduser(value))
+
+
+def get_runtime_scope(
+    *,
+    config_path: str | None = None,
+    backend: str = "",
+    model_ref: str = "",
+    profile: str = "",
+) -> dict[str, str]:
+    repo_root = _repo_root()
+    run_root = get_machine_run_root()
+    model_name = ""
+    backend_name = (backend or "").strip().lower()
+
+    cfg_path = os.path.abspath(os.path.expanduser(config_path)) if config_path else ""
+    if cfg_path:
+        repo_models_root = os.path.join(repo_root, "models") + os.sep
+        if cfg_path.startswith(repo_models_root):
+            rel = os.path.relpath(cfg_path, os.path.join(repo_root, "models"))
+            parts = rel.split(os.sep)
+            if len(parts) >= 2:
+                model_name = parts[0].strip()
+                if not backend_name:
+                    backend_name = parts[1].strip().lower()
+
+    if not model_name and model_ref:
+        candidates = _model_name_candidates(model_ref)
+        if candidates:
+            model_name = candidates[0].strip()
+
+    model_name = model_name or "adhoc"
+    backend_name = backend_name or "misc"
+    slot_name = (profile or "").strip() or "default"
+
+    model_slug = _slug_path_part(model_name, "adhoc")
+    backend_slug = _slug_path_part(backend_name, "misc")
+    slot_slug = _slug_path_part(slot_name, "default")
+
+    return {
+        "run_root": run_root,
+        "backend": backend_slug,
+        "model": model_slug,
+        "slot": slot_slug,
+    }
 
 
 def _resolve_profile_path(base_path: str, profile: str) -> str:

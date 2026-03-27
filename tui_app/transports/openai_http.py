@@ -562,6 +562,7 @@ class OpenAIHTTPSession:
         aggregate_prompt_tokens = 0
         aggregate_completion_tokens = 0
         aggregate_total_tokens = 0
+        aggregate_estimated_completion_tokens = 0
         final_finish_reason: str | None = None
         final_knob_report: dict[str, object] | None = None
         final_context_prompt_tokens: int | None = None
@@ -587,13 +588,16 @@ class OpenAIHTTPSession:
             tool_calls: dict[str, dict[str, str | int]] = {}
             usage_totals: dict[str, int] | None = None
             finish_reason: str | None = None
+            generated_token_total = 0
             stage = "build_payload"
 
             def _emit_generated_text(text: str) -> None:
+                nonlocal generated_token_total
                 if not text:
                     return
                 token_inc = len(re.findall(r"\S+", text))
                 if token_inc > 0:
+                    generated_token_total += token_inc
                     emit(Meta(turn_id=turn_id, key="generated_tokens_inc", value=token_inc))
 
             def _emit_think(text: str) -> None:
@@ -609,6 +613,7 @@ class OpenAIHTTPSession:
                 "max_tokens": self.args.max_new_tokens,
                 "temperature": self.args.temperature,
                 "top_p": self.args.top_p,
+                "stream_options": {"include_usage": True},
             }
             if self.resolved_model_id:
                 payload["model"] = self.resolved_model_id
@@ -622,7 +627,6 @@ class OpenAIHTTPSession:
                 if tool_choice is not None:
                     payload["tool_choice"] = tool_choice
             if self.backend_name == "vllm":
-                payload["stream_options"] = {"include_usage": True}
                 if self.args.presence_penalty not in (None, 0.0):
                     payload["presence_penalty"] = self.args.presence_penalty
                 if self.args.frequency_penalty not in (None, 0.0):
@@ -895,6 +899,7 @@ class OpenAIHTTPSession:
                 tool_calls_out,
                 assistant_message,
                 router.mode == "think",
+                generated_token_total,
             )
 
         while True:
@@ -910,6 +915,7 @@ class OpenAIHTTPSession:
                     tool_calls_out,
                     assistant_message,
                     ended_in_think,
+                    generated_token_total,
                 ) = _run_attempt(include_tools=tools_active and tool_runtime.max_calls_per_turn > len(all_tool_calls_for_gen))
             except _ContextOverflow:
                 if _drop_oldest_turn():
@@ -945,6 +951,7 @@ class OpenAIHTTPSession:
             aggregate_raw_parts.extend(raw_parts)
             aggregate_think_parts.extend(think_parts)
             aggregate_answer_parts.extend(answer_parts)
+            aggregate_estimated_completion_tokens += int(generated_token_total)
             if isinstance(usage_totals, dict):
                 prompt_tokens = usage_totals.get("prompt_tokens")
                 completion_tokens = usage_totals.get("completion_tokens")
@@ -1064,6 +1071,10 @@ class OpenAIHTTPSession:
                 "prompt_tokens": aggregate_prompt_tokens,
                 "completion_tokens": aggregate_completion_tokens,
                 "total_tokens": aggregate_total_tokens,
+            }
+        elif aggregate_estimated_completion_tokens > 0:
+            token_counts = {
+                "completion_tokens": aggregate_estimated_completion_tokens,
             }
         if token_counts is not None and token_counts.get("completion_tokens", 0) > 0 and elapsed > 0:
             throughput = {"tokens_per_s": token_counts["completion_tokens"] / elapsed}

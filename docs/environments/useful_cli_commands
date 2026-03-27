@@ -1,5 +1,11 @@
   Examples:
 
+  On this Fedora machine, raw vLLM CLI calls need the repo-local Torch/NVIDIA libs on
+  `LD_LIBRARY_PATH`. The managed `./vllm-up` wrapper already does this for you. For direct
+  CLI inspection, use:
+
+  export LD_LIBRARY_PATH="/home/poop/code/dev/model-runner/.venv/lib/python3.12/site-packages/torch/lib:/home/poop/code/dev/model-runner/.venv/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:/home/poop/code/dev/model-runner/.venv/lib/python3.12/site-packages/nvidia/cu13/lib:/home/poop/code/dev/model-runner/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:/home/poop/code/dev/model-runner/.venv/lib/python3.12/site-packages/nvidia/nccl/lib:/home/poop/code/dev/model-runner/.venv/lib/python3.12/site-packages/nvidia/nvshmem/lib:/home/poop/code/dev/model-runner/.venv/lib/python3.12/site-packages/nvidia/cusparselt/lib:${LD_LIBRARY_PATH:-}"
+
   .venv/bin/python -m vllm.entrypoints.cli.main serve --help=all | rg "FLASH|flash|attn|attention"
 
   For FlashInfer specifically:

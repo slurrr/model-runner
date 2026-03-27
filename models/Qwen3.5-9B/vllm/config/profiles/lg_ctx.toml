@@ -5,9 +5,8 @@ max_new_tokens = 1024
 [backend.vllm]
 # Large-context profile philosophy:
 # - Reserve more VRAM for KV (gpu_memory_utilization + higher max_model_len).
-# - Keep swap-space=0 so it's VRAM-only ("fits or fails").
+# - Leave CPU offload disabled so it's VRAM-only ("fits or fails").
 extra_args = [
-  "--swap-space", "0",
   "--max-num-seqs", "1",
   "--enable-chunked-prefill",
   "--long-prefill-token-threshold", "2048",
@@ -24,4 +23,3 @@ extra_args = [
 ]
 gpu_memory_utilization = 0.96
 max_model_len = 32768
-

@@ -11,7 +11,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODELS_DIR = REPO_ROOT / "models"
 TEMPLATE_DIR = MODELS_DIR / "_TEMPLATE"
-HF_CACHE_DIR = Path(os.path.expanduser("~/.cache/huggingface/hub"))
+HF_CACHE_DIR = Path(os.path.expanduser(os.environ.get("HF_HUB_CACHE", "~/models/hf/hub")))
 
 
 def _looks_like_local_path(value: str) -> bool:
@@ -165,7 +165,7 @@ def _resolve_model_card_source(backend: str, backend_id: str | None) -> Path | N
     Decide where to copy a model card from.
     - If backend_id is a local directory and has README.md, use it.
     - If backend_id looks like a HF id, try:
-        - ~/ml/models/<stem>/README.md
+        - ~/models/local/<stem>/README.md
         - ~/.cache/huggingface/hub/.../snapshots/*/README.md
     """
     if backend != "hf" or not backend_id:
@@ -178,9 +178,9 @@ def _resolve_model_card_source(backend: str, backend_id: str | None) -> Path | N
         if readme.is_file():
             return readme
 
-    # Common local convention: store under ~/ml/models/<name>.
+    # Common local convention: store under ~/models/local/<name>.
     stem = backend_id.split("/")[-1]
-    local_models = Path(os.path.expanduser("~/ml/models")) / stem
+    local_models = Path(os.path.expanduser("~/models/local")) / stem
     readme = local_models / "README.md"
     if readme.is_file():
         return readme
@@ -194,12 +194,12 @@ def _resolve_model_card_source_without_id(model_name: str) -> Path | None:
     Best-effort model card discovery when the user didn't pass --id.
 
     Heuristics:
-    - If the user keeps local weights under ~/ml/models/<model_name>, use README.md from there.
+    - If the user keeps local weights under ~/models/local/<model_name>, use README.md from there.
     - Otherwise, if model_name looks like a HF id (org/name), try the HF cache.
     """
     if not model_name:
         return None
-    local_dir = Path(os.path.expanduser("~/ml/models")) / model_name
+    local_dir = Path(os.path.expanduser("~/models/local")) / model_name
     readme = local_dir / "README.md"
     if readme.is_file():
         return readme

@@ -1,10 +1,13 @@
 [machine]
+run_root = "/home/poop/runs/model-runner"
 # Local path containing model folders/files (not committed in machine.toml).
-model_root = "/home/poop/ml/models"
+model_root = "/home/poop/models/local"
+gguf_model_root = "/home/poop/models/local/gguf"
+exl2_model_root = "/home/poop/models/local/exl2"
 
 # Optional per-machine endpoint defaults.
 ollama_host = "http://127.0.0.1:11434"
 
 # Optional placeholders for future backends.
-hf_cache_dir = ""
+hf_cache_dir = "/home/poop/models/hf"
 openai_base_url = "http://127.0.0.1:8000/v1"

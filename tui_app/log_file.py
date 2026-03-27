@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from typing import Callable
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from config_utils import get_machine_run_root, get_runtime_scope
+
 
 _QUERY_SECRET_KEYS = {
     "access_token",
@@ -63,7 +65,21 @@ class FileLogger:
         if os.path.isabs(expanded):
             return expanded
         if config_path:
-            cfg_dir = os.path.dirname(config_path)
+            cfg_dir = os.path.dirname(os.path.abspath(config_path))
+            repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+            repo_prefix = repo_root + os.sep
+            if cfg_dir.startswith(repo_prefix):
+                scope = get_runtime_scope(config_path=config_path)
+                return os.path.abspath(
+                    os.path.join(
+                        get_machine_run_root(),
+                        "logs",
+                        scope["backend"],
+                        scope["model"],
+                        scope["slot"],
+                        expanded,
+                    )
+                )
             if cfg_dir:
                 return os.path.abspath(os.path.join(cfg_dir, expanded))
         return os.path.abspath(expanded)

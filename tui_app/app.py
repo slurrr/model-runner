@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import deque
 import difflib
 import json
 import os
@@ -152,6 +153,8 @@ class ThinkingPanel(Container):
         self.total_seconds = 0.0
         self.tokens_per_sec = 0.0
         self.ended_in_think = False
+        self._token_events: deque[tuple[float, int]] = deque()
+        self._live_window_seconds = 2.0
 
     def compose(self) -> ComposeResult:
         yield Static(id="thinking-header")
@@ -165,8 +168,27 @@ class ThinkingPanel(Container):
 
     def _tick(self):
         if self.running and not self.expanded:
+            self._trim_token_events()
             self.phase += 1
             self._render_header()
+
+    def _trim_token_events(self, now: float | None = None):
+        if now is None:
+            now = time.time()
+        cutoff = now - self._live_window_seconds
+        while self._token_events and self._token_events[0][0] < cutoff:
+            self._token_events.popleft()
+
+    def _live_tokens_per_sec(self) -> float:
+        if not self._token_events:
+            return 0.0
+        now = time.time()
+        self._trim_token_events(now)
+        if not self._token_events:
+            return 0.0
+        span = max(0.001, now - self._token_events[0][0])
+        tokens = sum(token_inc for _ts, token_inc in self._token_events)
+        return tokens / span
 
     def _header_text(self) -> Text:
         arrow = "▼" if self.expanded else ">"
@@ -177,7 +199,7 @@ class ThinkingPanel(Container):
             elapsed = (time.time() - self.started_at) if (self.running and self.started_at is not None) else self.total_seconds
             suffix = f" ({self.generated_tokens} tokens"
             if self.running:
-                live_tps = (self.generated_tokens / elapsed) if elapsed > 0 else 0.0
+                live_tps = self._live_tokens_per_sec()
                 suffix += f", {elapsed:.1f}s, {live_tps:.1f} tok/sec"
             else:
                 suffix += f", {self.total_seconds:.1f}s, {self.tokens_per_sec:.1f} tok/sec"
@@ -213,13 +235,17 @@ class ThinkingPanel(Container):
     def start(self):
         if self.started_at is None:
             self.started_at = time.time()
+        self._token_events.clear()
         self.running = True
         self._render_header()
 
     def add_generated_tokens(self, token_inc: int):
         if token_inc <= 0:
             return
+        now = time.time()
         self.generated_tokens += token_inc
+        self._token_events.append((now, int(token_inc)))
+        self._trim_token_events(now)
         self._render_header()
 
     def append_thinking(self, text: str):
@@ -1375,6 +1401,7 @@ class UnifiedTuiApp(App):
             context = self._context_view(last)
             data["last_turn"] = {
                 "elapsed_s": last.timing.get("elapsed"),
+                "time_to_first_token_s": last.timing.get("time_to_first_token"),
                 "ended_in_think": bool(last.ended_in_think),
                 "chars_raw": len(last.raw),
                 "chars_think": len(last.think),
@@ -1417,7 +1444,12 @@ class UnifiedTuiApp(App):
             lines.extend(
                 [
                     "last_turn:",
-                    f"  elapsed_s={lt['elapsed_s']} ended_in_think={lt['ended_in_think']} tools={lt['tool_activity_count']}",
+                    (
+                        f"  elapsed_s={lt['elapsed_s']} "
+                        f"ttft_s={lt['time_to_first_token_s']} "
+                        f"ended_in_think={lt['ended_in_think']} "
+                        f"tools={lt['tool_activity_count']}"
+                    ),
                     (
                         "  tokens: "
                         f"prompt={lt['prompt_tokens']} completion={lt['completion_tokens']} "
@@ -1575,7 +1607,7 @@ class UnifiedTuiApp(App):
             "kv_cache_dtype": "none",
             "calculate_kv_scales": False,
             "stream_interval": "default",
-            "swap_space": "default",
+            "cpu_offload_gb": "default",
             "max_num_seqs": "default",
         }
         idx = 0
@@ -1594,8 +1626,8 @@ class UnifiedTuiApp(App):
                 out["stream_interval"] = nxt
                 idx += 2
                 continue
-            if token == "--swap-space" and nxt is not None:
-                out["swap_space"] = nxt
+            if token == "--cpu-offload-gb" and nxt is not None:
+                out["cpu_offload_gb"] = nxt
                 idx += 2
                 continue
             if token == "--max-num-seqs" and nxt is not None:
@@ -1638,7 +1670,7 @@ class UnifiedTuiApp(App):
                     "context_allocation": "preallocated_kv_cache",
                     "stream_interval": flags["stream_interval"],
                     "max_num_seqs": flags["max_num_seqs"],
-                    "swap_space": flags["swap_space"],
+                    "cpu_offload_gb": flags["cpu_offload_gb"],
                 }
             )
             return summary
@@ -1733,7 +1765,7 @@ class UnifiedTuiApp(App):
                 "context_window_target": int(args.vllm_max_model_len or 0) or "server_default",
                 "stream_interval": flags["stream_interval"],
                 "max_num_seqs": flags["max_num_seqs"],
-                "swap_space": flags["swap_space"],
+                "cpu_offload_gb": flags["cpu_offload_gb"],
             }
             effective = {
                 "weights_quantization": "none",
@@ -1744,7 +1776,7 @@ class UnifiedTuiApp(App):
                 "context_allocation": "preallocated_kv_cache",
                 "stream_interval": requested["stream_interval"],
                 "max_num_seqs": requested["max_num_seqs"],
-                "swap_space": requested["swap_space"],
+                "cpu_offload_gb": requested["cpu_offload_gb"],
             }
             return requested, effective
 
@@ -1942,35 +1974,53 @@ class UnifiedTuiApp(App):
         last = self.turn_records[-1]
         token_counts = self._token_counts_view(last)
         context = self._context_view(last)
+        finish_reason = None
+        if isinstance(last.gen, dict):
+            finish_reason = last.gen.get("finish_reason")
         data = {
             "backend": last.backend,
             "model_id": last.model_id,
             "ended_in_think": last.ended_in_think,
             "elapsed": last.timing.get("elapsed"),
-            "chars_raw": len(last.raw),
-            "chars_think": len(last.think),
-            "chars_answer": len(last.answer),
+            "time_to_first_token": last.timing.get("time_to_first_token"),
             "prompt_tokens": token_counts["prompt_tokens"],
             "completion_tokens": token_counts["completion_tokens"],
             "total_tokens": token_counts["total_tokens"],
             "tokens_per_s": self._tokens_per_s_view(last),
-            "context": context,
             "tool_activity_count": len(last.tool_activity or []),
+            "finish_reason": finish_reason if finish_reason is not None else "unavailable",
+            "context": context,
         }
-        finish_reason = None
-        if isinstance(last.gen, dict):
-            finish_reason = last.gen.get("finish_reason")
-        if finish_reason is not None:
-            data["finish_reason"] = finish_reason
-        data["len_raw"] = data["chars_raw"]
-        data["len_think"] = data["chars_think"]
-        data["len_answer"] = data["chars_answer"]
-        lines = [f"{k}: {v}" for k, v in data.items()]
+        lines = [
+            f"backend: {data['backend']}",
+            f"model: {data['model_id']}",
+            "timing:",
+            f"  elapsed: {data['elapsed']}",
+            f"  ttft: {data['time_to_first_token']}",
+            f"  tok/s: {data['tokens_per_s']}",
+            "tokens:",
+            f"  prompt: {data['prompt_tokens']}",
+            f"  completion: {data['completion_tokens']}",
+            f"  total: {data['total_tokens']}",
+            "result:",
+            f"  finish_reason: {data['finish_reason']}",
+            f"  ended_in_think: {data['ended_in_think']}",
+            f"  tools: {data['tool_activity_count']}",
+            "context:",
+            f"  strategy: {context['strategy']}",
+            f"  dropped_messages: {context['dropped_messages']}",
+            f"  fit: {context['fit']}",
+            f"  system_preserved: {context['system_message_preserved']}",
+        ]
         if self._show_opts().verbose:
+            data["chars_raw"] = len(last.raw)
+            data["chars_think"] = len(last.think)
+            data["chars_answer"] = len(last.answer)
             data["raw"] = last.raw
             data["think"] = last.think
             data["answer"] = last.answer
             data["tool_activity"] = list(last.tool_activity or [])
+            lines.extend(["", "chars:", f"  raw: {data['chars_raw']}", f"  think: {data['chars_think']}", f"  answer: {data['chars_answer']}"])
             lines.extend(["", "raw:", last.raw, "", "think:", last.think, "", "answer:", last.answer])
             lines.extend(["", "tool_activity:"])
             if last.tool_activity:
@@ -2092,7 +2142,7 @@ class UnifiedTuiApp(App):
             "context_allocation",
             "stream_interval",
             "max_num_seqs",
-            "swap_space",
+            "cpu_offload_gb",
         ]
         for key in preferred:
             if key in effective_runtime:
@@ -2369,6 +2419,16 @@ class UnifiedTuiApp(App):
                     telemetry.publish_error(scope="turn", message=ev.message)
             elif isinstance(ev, Finish):
                 record = ev.record
+                timing = record.timing if isinstance(record.timing, dict) else {}
+                if "time_to_first_token" not in timing and self._pending_turn_first_token_at is not None:
+                    started_at = timing.get("start")
+                    if not isinstance(started_at, (int, float)):
+                        started_at = self._pending_turn_started_at
+                    if isinstance(started_at, (int, float)):
+                        timing["time_to_first_token"] = max(
+                            0.0,
+                            float(self._pending_turn_first_token_at) - float(started_at),
+                        )
                 self.pending_assistant.finish(record)
                 if record.trimmed_messages is not None:
                     self.messages = list(record.trimmed_messages)
@@ -2380,16 +2440,6 @@ class UnifiedTuiApp(App):
                     self._append_transcript_record(record)
                 telemetry = self.runtime.telemetry
                 if telemetry is not None and telemetry.enabled:
-                    timing = record.timing if isinstance(record.timing, dict) else {}
-                    if "time_to_first_token" not in timing and self._pending_turn_first_token_at is not None:
-                        started_at = timing.get("start")
-                        if not isinstance(started_at, (int, float)):
-                            started_at = self._pending_turn_started_at
-                        if isinstance(started_at, (int, float)):
-                            timing["time_to_first_token"] = max(
-                                0.0,
-                                float(self._pending_turn_first_token_at) - float(started_at),
-                            )
                     telemetry.publish_turn_finished(turn_id=ev.turn_id, record=record)
                 self.is_generating = False
                 self._pending_turn_started_at = None
