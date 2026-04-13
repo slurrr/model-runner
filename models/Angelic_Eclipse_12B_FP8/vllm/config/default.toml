@@ -1,15 +1,15 @@
 [model]
-id = ""
+id = "Angelic_Eclipse_12B_FP8"
 
 [gen]
 stream = true
 max_new_tokens = 8192
-temperature = 0.6
-top_p = 1.0
-top_k = -1
-min_p = 0.05
-repetition_penalty = 0.0
-presence_penalty = 0.2
+temperature = 0.77
+top_p = 0.83
+top_k = 320
+min_p = 0.0
+repetition_penalty = 1.03
+presence_penalty = 0.0
 frequency_penalty = 0.0
 stop_strings = []
 stop_token_ids = []
@@ -28,11 +28,11 @@ prompt_logprobs = 0
 [prompt]
 chat_template = ""
 system = ""
-system_file = ""
+system_file = "models/models--sh0ck0r--L3-Aethora-15B-FP8-Dynamic/vllm/prompts/system.txt"
 user_prefix = ""
 
 [ui]
-show_thinking = false
+show_thinking = true
 assume_think = false
 history_strip_think = true
 no_animate_thinking = false
@@ -49,9 +49,10 @@ jsonl = ""
 sample_interval_s = 1.0
 
 [tools]
-enabled = true
+enabled = false
 mode = "execute"
 schema_file = ""
+tool_choice = ""
 allow = []
 deny = []
 max_calls_per_turn = 3
@@ -63,17 +64,18 @@ mode = "managed"
 host = "127.0.0.1"
 port = 40223
 cmd = "vllm"
-extra_args = ["--max-num-seqs", "1", "--enable-log-requests", "--stream-interval", "1", "--kv-cache-dtype", "fp8"]
+extra_args = ["--max-num-seqs", "1"]
 base_url = ""
 api_key = ""
 timeout_s = 900
 generation_config = "vllm"
 attention_backend = ""
 dtype = "bfloat16"
-# enable_auto_tool_choice = true
-tool_call_parser = ""
+kv_cache_dtype = "fp8_e4m3"
+enable_auto_tool_choice = true
+tool_call_parser = "qwen3_xml"
 log_file = ""
-served_model_name = ""
+served_model_name = "Angelic_Eclipse_12B_FP8"
 tensor_parallel_size = 1
-gpu_memory_utilization = 0.95
-# max_model_len = 131072
+gpu_memory_utilization = 0.933
+max_model_len = 42240

@@ -15,7 +15,7 @@ repetition_penalty = 1.03
 
 [ui]
 show_thinking = false
-assume_think = false
+assume_think = true
 history_strip_think = true
 no_animate_thinking = false
 save_transcript = ""

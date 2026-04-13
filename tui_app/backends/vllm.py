@@ -156,6 +156,16 @@ def _ensure_parent_dir(path: str) -> None:
 def _pid_alive(pid: int) -> bool:
     if pid <= 0:
         return False
+    proc_stat = f"/proc/{pid}/stat"
+    try:
+        with open(proc_stat, "r", encoding="utf-8", errors="replace") as fh:
+            stat = fh.read().strip()
+        if stat:
+            parts = stat.split()
+            if len(parts) >= 3 and parts[2] == "Z":
+                return False
+    except Exception:
+        pass
     try:
         os.kill(pid, 0)
         return True
@@ -796,6 +806,24 @@ def _build_launch_argv(args: argparse.Namespace, host: str, port: int, model_id:
     return launch
 
 
+def _split_env_prefixed_argv(argv: list[str]) -> tuple[dict[str, str], list[str]]:
+    env_updates: dict[str, str] = {}
+    out = list(argv)
+    if not out or out[0] != "env":
+        return env_updates, out
+
+    idx = 1
+    while idx < len(out):
+        token = str(out[idx])
+        if "=" not in token:
+            break
+        key, value = token.split("=", 1)
+        if key:
+            env_updates[key] = value
+        idx += 1
+    return env_updates, out[idx:]
+
+
 def _wait_until_ready(
     process: subprocess.Popen | None,
     *,
@@ -940,6 +968,11 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
     base_url = normalize_openai_base_url(f"http://{host}:{port}")
 
     launch_argv = _build_launch_argv(args, host=host, port=port, model_id=model_id)
+    launch_env_updates, launch_argv = _split_env_prefixed_argv(launch_argv)
+    if launch_argv == ["vllm"] and shutil.which("vllm") is None:
+        launch_argv = [sys.executable, "-m", "vllm.entrypoints.cli.main"]
+    elif launch_argv and launch_argv[0] == "vllm" and shutil.which("vllm") is None:
+        launch_argv = [sys.executable, "-m", "vllm.entrypoints.cli.main", *launch_argv[1:]]
     requested_template = (args.chat_template or "").strip()
     template_requested_value = requested_template
     template_applied = False
@@ -961,6 +994,11 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
         config_path=getattr(args, "_config_path", None),
     )
     logger.log(f"launch_argv: {' '.join(shlex.quote(p) for p in launch_argv)}", source="app")
+    if launch_env_updates:
+        logger.log(
+            "launch_env: " + " ".join(f"{k}={v}" for k, v in sorted(launch_env_updates.items())),
+            source="app",
+        )
 
     stdout_path, stderr_path = _resolve_engine_log_paths(args)
     _ensure_parent_dir(stdout_path)
@@ -970,6 +1008,9 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
     stdout_fh = open(stdout_path, "w", encoding="utf-8")
     stderr_fh = open(stderr_path, "w", encoding="utf-8")
     try:
+        child_env = os.environ.copy()
+        if launch_env_updates:
+            child_env.update(launch_env_updates)
         process = subprocess.Popen(
             launch_argv,
             shell=False,
@@ -978,6 +1019,7 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
             text=True,
             bufsize=1,
             preexec_fn=os.setsid,
+            env=child_env,
         )
     except OSError as exc:
         stdout_fh.close()

@@ -8,6 +8,7 @@ import re
 import sys
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 import torch
 from jinja2 import Environment
@@ -36,6 +37,7 @@ def resolve_exl2_model_dir(
     *,
     model_path: str | None = None,
     exl2_repo_path: str | None = None,
+    hf_cache_dir: str | None = None,
     config_path: str | None = None,
 ) -> str:
     primary = normalize_model_dir(model_ref)
@@ -44,6 +46,10 @@ def resolve_exl2_model_dir(
 
     if os.path.isabs(os.path.expanduser((model_ref or "").strip())):
         return primary
+
+    hf_candidate = _resolve_hf_snapshot_dir(hf_cache_dir, model_ref)
+    if hf_candidate:
+        return hf_candidate
 
     candidates: list[str] = []
     if model_path:
@@ -56,6 +62,47 @@ def resolve_exl2_model_dir(
         if os.path.isdir(normalized):
             return normalized
     return primary
+
+
+def _resolve_hf_snapshot_dir(hf_cache_dir: str | None, model_ref: str) -> str:
+    cache_root = Path(os.path.expanduser((hf_cache_dir or "").strip()))
+    model_ref = (model_ref or "").strip()
+    if not model_ref or not cache_root.is_dir():
+        return ""
+
+    if (cache_root / "hub").is_dir():
+        cache_root = cache_root / "hub"
+
+    repo_candidates: list[Path] = []
+    if model_ref.startswith("models--"):
+        repo_candidates.append(cache_root / model_ref)
+    if "/" in model_ref and not model_ref.startswith("models--"):
+        owner, name = model_ref.split("/", 1)
+        repo_candidates.append(cache_root / f"models--{owner}--{name}")
+    repo_candidates.extend(sorted(cache_root.glob(f"models--*--{model_ref}")))
+
+    seen: set[str] = set()
+    best_path = ""
+    best_mtime = -1.0
+    for repo_dir in repo_candidates:
+        repo_key = str(repo_dir)
+        if repo_key in seen or not repo_dir.is_dir():
+            continue
+        seen.add(repo_key)
+        snapshots_dir = repo_dir / "snapshots"
+        if not snapshots_dir.is_dir():
+            continue
+        for snap_dir in snapshots_dir.iterdir():
+            if not snap_dir.is_dir():
+                continue
+            try:
+                mtime = snap_dir.stat().st_mtime
+            except OSError:
+                continue
+            if mtime > best_mtime:
+                best_mtime = mtime
+                best_path = str(snap_dir.resolve())
+    return best_path
 
 
 def resolve_path_maybe_relative(path: str, config_path: str | None = None) -> str:
@@ -710,6 +757,7 @@ def create_session(args: argparse.Namespace) -> EXL2Session:
         args.model_id,
         model_path=getattr(args, "model_path", None),
         exl2_repo_path=getattr(args, "exl2_repo_path", None),
+        hf_cache_dir=getattr(args, "hf_cache_dir", None),
         config_path=getattr(args, "_config_path", None),
     )
     if not os.path.isdir(model_dir):

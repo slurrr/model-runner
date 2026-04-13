@@ -225,10 +225,22 @@ def _latest_hf_snapshot_dir(hf_cache_dir: str, stem: str) -> str:
     if (cache_root / "hub").is_dir():
         cache_root = cache_root / "hub"
 
-    repo_candidates = sorted(cache_root.glob(f"models--*--{stem}"))
+    repo_candidates: list[Path] = []
+    if stem.startswith("models--"):
+        repo_candidates.append(cache_root / stem)
+    elif "/" in stem:
+        owner, name = stem.split("/", 1)
+        repo_candidates.append(cache_root / f"models--{owner}--{name}")
+    repo_candidates.extend(sorted(cache_root.glob(f"models--*--{stem}")))
+
+    seen: set[str] = set()
     best_path = ""
     best_mtime = -1.0
     for repo_dir in repo_candidates:
+        repo_key = str(repo_dir)
+        if repo_key in seen:
+            continue
+        seen.add(repo_key)
         snapshots_dir = repo_dir / "snapshots"
         if not snapshots_dir.is_dir():
             continue
@@ -294,7 +306,11 @@ def _apply_machine_overrides(data: dict, *, backend: str, machine_path: str) -> 
             return False
         return True
 
-    if isinstance(out.get("model_id"), str):
+    # EXL2 has its own root (`exl2_model_root`) and should keep `model_id`
+    # as the local stem while `model_path` points at the backend-specific base
+    # directory. Running it through the generic model_root resolver points it
+    # at the wrong tree (`~/models/local/...` instead of `~/models/local/exl2/...`).
+    if backend != "exl2" and isinstance(out.get("model_id"), str):
         out["model_id"] = _resolve_machine_model_ref(out["model_id"], machine=machine)
 
     if backend == "gguf":

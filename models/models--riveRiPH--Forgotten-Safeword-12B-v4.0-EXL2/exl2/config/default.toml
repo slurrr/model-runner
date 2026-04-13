@@ -1,0 +1,52 @@
+[model]
+id = "models--riveRiPH--Forgotten-Safeword-12B-v4.0-EXL2"
+
+[gen]
+max_new_tokens = 8192
+repetition_penalty = 1.0
+stream = true
+temperature = 0.9
+top_p = 0.8
+
+[prompt]
+chat_template = ""
+prompt_mode = "chat"
+system = ""
+system_file = ""
+user_prefix = ""
+
+[ui]
+assume_think = false
+history_strip_think = false
+no_animate_thinking = false
+save_transcript = ""
+capture_last_request = false
+show_thinking = false
+show_tool_activity = false
+show_tool_arguments = false
+
+[telemetry]
+jsonl = ""
+sample_interval_s = 1.0
+
+[tools]
+enabled = false
+mode = "dry_run"
+schema_file = ""
+allow = []
+deny = []
+max_calls_per_turn = 3
+timeout_s = 10
+max_result_chars = 8000
+
+[backend.exl2]
+cache_type = "fp16"
+exl2_repeat_streak_max = 64
+exl2_repo_path = ""
+gpu_split = ""
+log_file = ""
+low_mem = false
+max_seq_len = 65536
+min_free_tokens = 256
+model_path = ""
+sdpa = true

@@ -6,4 +6,40 @@ PY="$ROOT/.venv/bin/python"
 if [[ ! -x "$PY" ]]; then
   PY="${PYTHON:-python3}"
 fi
+
+export PATH="$ROOT/.venv/bin:$PATH"
+
+SITE_PACKAGES="$ROOT/.venv/lib/python3.12/site-packages"
+LIB_DIRS=()
+for candidate in \
+  "$SITE_PACKAGES/torch/lib" \
+  "$SITE_PACKAGES/nvidia/cuda_runtime/lib" \
+  "$SITE_PACKAGES/nvidia/cu13/lib" \
+  "$SITE_PACKAGES/nvidia/cudnn/lib" \
+  "$SITE_PACKAGES/nvidia/cusparselt/lib" \
+  "$SITE_PACKAGES/nvidia/nccl/lib" \
+  "$SITE_PACKAGES/nvidia/nvshmem/lib"
+do
+  if [[ -d "$candidate" ]]; then
+    LIB_DIRS+=("$candidate")
+  fi
+done
+
+if [[ ${#LIB_DIRS[@]} -gt 0 ]]; then
+  LIB_PATH="$(IFS=:; echo "${LIB_DIRS[*]}")"
+  if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+    export LD_LIBRARY_PATH="$LIB_PATH:$LD_LIBRARY_PATH"
+  else
+    export LD_LIBRARY_PATH="$LIB_PATH"
+  fi
+fi
+
+if [[ -d /usr/local/cuda ]]; then
+  export CUDA_HOME=/usr/local/cuda
+  export CUDA_PATH=/usr/local/cuda
+  export CUDACXX=/usr/local/cuda/bin/nvcc
+  export NVCC_CCBIN=/usr/bin/g++-14
+  export PATH=/usr/local/cuda/bin:$PATH
+fi
+
 exec "$PY" "$ROOT/tui.py" "$@"

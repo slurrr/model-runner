@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import glob
+import json
 import os
 import re
+import shlex
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -148,17 +151,69 @@ def _infer_backend_from_default_config(model: str) -> str | None:
     return None
 
 
+def _infer_backend_from_loaded_config(config_data: dict | None, config_path: str | None) -> str | None:
+    if isinstance(config_path, str) and config_path.strip():
+        normalized = normalize_windows_path(config_path).replace("\\", "/").lower()
+        for backend in ("openai", "vllm", "ollama", "gguf", "exl2", "hf"):
+            if f"/{backend}/config/" in normalized:
+                return backend
+
+    if not isinstance(config_data, dict):
+        return None
+
+    if str(config_data.get("openai_base_url") or "").strip():
+        return "openai"
+    if (
+        str(config_data.get("vllm_base_url") or "").strip()
+        or str(config_data.get("vllm_mode") or "").strip()
+        or int(config_data.get("vllm_port") or 0) > 0
+    ):
+        return "vllm"
+    if str(config_data.get("ollama_host") or "").strip():
+        return "ollama"
+
+    model_path = str(config_data.get("model_path") or "").strip()
+    if model_path:
+        if model_path.lower().endswith(".gguf"):
+            return "gguf"
+        if str(config_data.get("exl2_repo_path") or "").strip():
+            return "exl2"
+
+    return None
+
+
+def _known_attach_selector(raw: str) -> str | None:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    if value.startswith("attach:"):
+        return value if _resolve_attachable_backend(value) is not None else None
+    prefixed = f"attach:{value}"
+    if _resolve_attachable_backend(prefixed) is not None:
+        return prefixed
+    return None
+
+
 def _normalize_cli_argv(raw_argv: list[str]) -> list[str]:
     argv = list(raw_argv)
+    backend_tokens = {"hf", "gguf", "ollama", "exl2", "openai", "vllm"}
+    if len(argv) == 1 and argv[0] in backend_tokens:
+        return ["--backend", argv[0]]
     if len(argv) >= 2 and argv[0] == "attach":
         selector = argv[1].strip()
         rest = argv[2:]
-        if re.match(r"^(vllm|openai|ollama|hf|gguf|exl2)-.+-\d+$", selector) and not selector.startswith("attach:"):
+        resolved = _known_attach_selector(selector)
+        if resolved is not None:
+            selector = resolved
+        elif re.match(r"^(vllm|openai|ollama|hf|gguf|exl2|agentmux)-.+-\d+$", selector) and not selector.startswith("attach:"):
             selector = f"attach:{selector}"
         return [selector, *rest]
     if argv and not argv[0].startswith("-"):
         selector = argv[0].strip()
-        if re.match(r"^(vllm|openai|ollama|hf|gguf|exl2)-.+-\d+$", selector) and not selector.startswith("attach:"):
+        resolved = _known_attach_selector(selector)
+        if resolved is not None:
+            argv[0] = resolved
+        elif re.match(r"^(vllm|openai|ollama|hf|gguf|exl2|agentmux)-.+-\d+$", selector) and not selector.startswith("attach:"):
             argv[0] = f"attach:{selector}"
     return argv
 
@@ -182,7 +237,87 @@ def _attach_selector(entry: dict[str, object]) -> str:
     return f"attach:{kind}-{model}-{port}"
 
 
-def _discover_vllm_attachable_backends() -> list[dict[str, object]]:
+def _extract_flag_value(command: list[object], flag: str) -> str:
+    items = [str(item) for item in command]
+    for index, item in enumerate(items):
+        if item == flag and index + 1 < len(items):
+            return items[index + 1]
+    return ""
+
+
+def _agentmux_active_path() -> str:
+    return os.path.join(os.path.expanduser("~"), "runs", "agentmux", "state", "active.json")
+
+
+def _agentmux_attach_selector(stack: str, service: str, port: int) -> str:
+    stack_slug = _slug_path_part(stack, "stack")
+    service_slug = _slug_path_part(service, "service")
+    return f"attach:agentmux-{stack_slug}-{service_slug}-{port}"
+
+
+def _list_agentmux_vllm_processes() -> list[dict[str, object]]:
+    try:
+        output = subprocess.check_output(["ps", "-eo", "pid=,args="], text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        return []
+
+    entries: list[dict[str, object]] = []
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            pid_text, command_text = line.split(None, 1)
+        except ValueError:
+            continue
+        if "agentmux/.venv/bin/vllm serve " not in command_text:
+            continue
+        try:
+            pid = int(pid_text)
+        except ValueError:
+            continue
+        try:
+            argv = shlex.split(command_text)
+        except Exception:
+            continue
+        if "serve" not in argv:
+            continue
+        host = _extract_flag_value(argv, "--host").strip() or "127.0.0.1"
+        if host == "0.0.0.0":
+            host = "127.0.0.1"
+        port_text = _extract_flag_value(argv, "--port").strip()
+        served_model_name = _extract_flag_value(argv, "--served-model-name").strip()
+        try:
+            port = int(port_text or 0)
+        except ValueError:
+            continue
+        if port <= 0:
+            continue
+        model_ref = ""
+        if "serve" in argv:
+            idx = argv.index("serve")
+            if idx + 1 < len(argv):
+                model_ref = argv[idx + 1]
+        service_name = "main"
+        for candidate in served_model_name, os.path.basename(model_ref):
+            text = (candidate or "").strip()
+            if text:
+                service_name = _slug_path_part(text, "main")
+                break
+        entries.append(
+            {
+                "pid": pid,
+                "host": host,
+                "port": port,
+                "served_model_name": served_model_name,
+                "service_name": service_name,
+                "source": "ps",
+            }
+        )
+    return entries
+
+
+def _discover_attachable_backends() -> list[dict[str, object]]:
     entries: list[dict[str, object]] = []
     seen_urls: set[str] = set()
 
@@ -233,6 +368,96 @@ def _discover_vllm_attachable_backends() -> list[dict[str, object]]:
             control_file=str(row.get("control_file") or ""),
         )
 
+    active_path = _agentmux_active_path()
+    if os.path.isfile(active_path):
+        try:
+            with open(active_path, "r", encoding="utf-8") as fh:
+                active = json.load(fh)
+        except Exception:
+            active = None
+        if isinstance(active, dict):
+            stack_name = str(active.get("stack") or "").strip()
+            services = active.get("services")
+            if isinstance(services, list):
+                for service in services:
+                    if not isinstance(service, dict):
+                        continue
+                    pid = int(service.get("pid") or 0)
+                    if pid <= 0:
+                        continue
+                    try:
+                        os.kill(pid, 0)
+                    except OSError:
+                        continue
+                    command = service.get("command")
+                    command_items = command if isinstance(command, list) else []
+                    rendered = " ".join(str(item) for item in command_items)
+                    if "vllm" not in rendered or "serve" not in rendered:
+                        continue
+                    service_name = str(service.get("name") or "").strip() or "service"
+                    host = _extract_flag_value(command_items, "--host").strip() or "127.0.0.1"
+                    if host == "0.0.0.0":
+                        host = "127.0.0.1"
+                    port_text = _extract_flag_value(command_items, "--port").strip()
+                    port = int(port_text or service.get("port") or 0)
+                    if port <= 0:
+                        continue
+                    base_url = f"http://{host}:{port}"
+                    normalized_url = normalize_openai_base_url(base_url)
+                    if not normalized_url or normalized_url in seen_urls:
+                        continue
+                    try:
+                        resolved_model_id = resolve_model_once(normalized_url, timeout_s=2.0, api_key="")
+                    except Exception:
+                        continue
+                    seen_urls.add(normalized_url)
+                    entries.append(
+                        {
+                            "kind": "agentmux",
+                            "backend": "openai",
+                            "base_url": normalized_url,
+                            "resolved_model_id": resolved_model_id,
+                            "label": f"{stack_name}/{service_name}",
+                            "source": f"{active_path}:{service_name}",
+                            "pid": pid,
+                            "control_file": active_path,
+                            "port": port,
+                            "selector": _agentmux_attach_selector(stack_name or "stack", service_name, port),
+                        }
+                    )
+
+    for process in _list_agentmux_vllm_processes():
+        host = str(process.get("host") or "127.0.0.1").strip() or "127.0.0.1"
+        port = int(process.get("port") or 0)
+        pid = int(process.get("pid") or 0)
+        if port <= 0 or pid <= 0:
+            continue
+        base_url = f"http://{host}:{port}"
+        normalized_url = normalize_openai_base_url(base_url)
+        if not normalized_url or normalized_url in seen_urls:
+            continue
+        try:
+            resolved_model_id = resolve_model_once(normalized_url, timeout_s=2.0, api_key="")
+        except Exception:
+            continue
+        seen_urls.add(normalized_url)
+        service_name = str(process.get("service_name") or "main")
+        label_name = str(process.get("served_model_name") or resolved_model_id or service_name).strip()
+        entries.append(
+            {
+                "kind": "agentmux",
+                "backend": "openai",
+                "base_url": normalized_url,
+                "resolved_model_id": resolved_model_id,
+                "label": f"agentmux/{label_name}",
+                "source": "agentmux process scan",
+                "pid": pid,
+                "control_file": active_path,
+                "port": port,
+                "selector": _agentmux_attach_selector("agentmux", service_name, port),
+            }
+        )
+
     for cfg_path in sorted(glob.glob(os.path.join(_repo_root(), "models", "*", "vllm", "config", "default.toml"))):
         try:
             merged, meta = load_config_layers(cfg_path, backend="vllm", include_machine=True)
@@ -256,14 +481,92 @@ def _discover_vllm_attachable_backends() -> list[dict[str, object]]:
 
 def _resolve_attachable_backend(selector: str) -> dict[str, object] | None:
     normalized = (selector or "").strip()
-    for entry in _discover_vllm_attachable_backends():
+    for entry in _discover_attachable_backends():
         if str(entry.get("selector") or "") == normalized:
             return entry
     return None
 
 
+def _extract_cli_option(argv: list[str], name: str) -> str:
+    for index, item in enumerate(argv):
+        if item == name and index + 1 < len(argv):
+            return argv[index + 1]
+        if item.startswith(name + "="):
+            return item.split("=", 1)[1]
+    return ""
+
+
+def _list_exl2_tui_processes() -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+    try:
+        output = subprocess.check_output(["ps", "-eo", "pid=,args="], text=True)
+    except Exception:
+        return entries
+
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split(None, 1)
+        if len(parts) != 2:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        if pid == os.getpid():
+            continue
+        cmdline = parts[1]
+        if "model-runner" not in cmdline or "tui" not in cmdline:
+            continue
+        argv = shlex.split(cmdline)
+        backend = _extract_cli_option(argv, "--backend")
+        if backend != "exl2":
+            continue
+        entries.append(
+            {
+                "pid": pid,
+                "cmdline": cmdline,
+                "config_path": _extract_cli_option(argv, "--config"),
+                "model_id": _extract_cli_option(argv, "--model-id"),
+            }
+        )
+    return entries
+
+
+def shutdown_exl2_session(args: argparse.Namespace) -> dict[str, object]:
+    candidates = _list_exl2_tui_processes()
+    config_path = str(getattr(args, "_config_path", None) or "").strip()
+    model_id = str(getattr(args, "model_id", None) or "").strip()
+
+    filtered: list[dict[str, object]] = []
+    for entry in candidates:
+        entry_config = str(entry.get("config_path") or "").strip()
+        entry_model = str(entry.get("model_id") or "").strip()
+        if config_path and entry_config and os.path.abspath(entry_config) == os.path.abspath(config_path):
+            filtered.append(entry)
+            continue
+        if model_id and entry_model and entry_model == model_id:
+            filtered.append(entry)
+
+    selected = filtered if filtered else candidates
+    if not selected:
+        return {"stopped": False, "reason": "not_found", "candidates": []}
+    if len(selected) > 1:
+        return {"stopped": False, "reason": "ambiguous", "candidates": selected}
+
+    target = selected[0]
+    pid = int(target.get("pid") or 0)
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError as exc:
+        return {"stopped": False, "reason": f"kill_failed: {exc}", "candidates": [target]}
+
+    return {"stopped": True, "pid": pid, "reason": "terminated", "cmdline": str(target.get("cmdline") or "")}
+
+
 def _print_attachable_backends() -> None:
-    entries = _discover_vllm_attachable_backends()
+    entries = _discover_attachable_backends()
     if not entries:
         print("No active attachable backends.")
         return
@@ -295,7 +598,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional backend shorthand (e.g. `tui Qwen3.5-9B hf`).",
     )
     parser.add_argument("--backend", choices=["hf", "gguf", "ollama", "exl2", "openai", "vllm"], default=None)
-    parser.add_argument("-ls", "--list", action="store_true", help="List active attachable backends (vLLM first).")
+    parser.add_argument(
+        "-ls",
+        "--list",
+        action="store_true",
+        help="List active attachable backends (model-runner vLLM + agentmux first).",
+    )
     parser.add_argument("--config", default="", help="Config path or name.")
     parser.add_argument("--profile", default="", help="Optional profile name (loads config/profiles/<name>.toml).")
     parser.add_argument("--backend-only", action="store_true", help="Start backend only without the TUI (vLLM managed only).")
@@ -567,6 +875,7 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "hf_max_memory",
         "hf_text_only",
         "hf_low_cpu_mem_usage",
+        "hf_cache_dir",
         "prompt_mode",
         "chat_template",
         "max_context_tokens",
@@ -900,6 +1209,15 @@ def parse_args() -> argparse.Namespace:
     pre.add_argument("--profile", default="")
     pre_args, _ = pre.parse_known_args(raw_argv)
 
+    if (
+        pre_args.model_id in {"hf", "gguf", "ollama", "exl2", "openai", "vllm"}
+        and pre_args.backend_hint is None
+        and pre_args.backend is None
+        and not pre_args.config
+    ):
+        pre_args.backend = pre_args.model_id
+        pre_args.model_id = None
+
     backend_override = pre_args.backend or pre_args.backend_hint
     backend = detect_backend(pre_args.model_id, backend_override)
     if pre_args.model_id and not pre_args.config and pre_args.backend is None and pre_args.backend_hint is None:
@@ -929,11 +1247,23 @@ def parse_args() -> argparse.Namespace:
             print(f"Loaded default config: {config_path}")
     if config_meta is None:
         config_meta = {}
+    config_backend = _infer_backend_from_loaded_config(config_data, config_path)
+    if pre_args.config and config_backend and config_backend != backend:
+        config_data, config_meta = load_config_layers(
+            pre_args.config,
+            backend=config_backend,
+            profile=pre_args.profile,
+            include_machine=True,
+        )
+        config_path = config_meta.get("base")
+        backend = config_backend
 
     parser = build_parser()
     defaults = _collect_config_defaults(config_data)
     if defaults:
         parser.set_defaults(**defaults)
+    if config_backend and pre_args.backend is None and pre_args.backend_hint is None:
+        parser.set_defaults(backend=config_backend)
 
     args = parser.parse_args(raw_argv)
     args._cli_overrides = cli_overrides
@@ -942,7 +1272,7 @@ def parse_args() -> argparse.Namespace:
     args._config_layers = list(config_meta.get("loaded", []) or ([] if not config_path else [config_path]))
     args._config_origins = dict(config_meta.get("origins", {}) or {})
     args.display_name = str(config_data.get("display_name", "") or "") if isinstance(config_data, dict) else ""
-    early_backend = detect_backend(args.model_id, args.backend)
+    early_backend = detect_backend(args.model_id, args.backend or config_backend)
     if early_backend == "openai" and not pre_args.model_id:
         # Attach mode should not inherit a local model path from config defaults.
         # Let the OpenAI-compatible session resolve /v1/models unless the user
@@ -984,7 +1314,7 @@ def parse_args() -> argparse.Namespace:
     if not args.model_id and early_backend == "openai":
         args.model_id = ""
 
-    backend_override = args.backend or args.backend_hint
+    backend_override = args.backend or args.backend_hint or config_backend
     args.backend = detect_backend(args.model_id, backend_override)
     if args.model_id and not pre_args.config and pre_args.backend is None and pre_args.backend_hint is None:
         inferred = _infer_backend_from_default_config(args.model_id)
@@ -1007,7 +1337,10 @@ def parse_args() -> argparse.Namespace:
         args.model_id = args.model_id.split(":", 1)[1]
     if args.backend == "vllm" and isinstance(args.model_id, str) and args.model_id.startswith("vllm:"):
         args.model_id = args.model_id.split(":", 1)[1]
-    if args.backend not in {"openai", "ollama"} and isinstance(args.model_id, str):
+    # EXL2 uses backend-specific model_path resolution from machine config;
+    # sending its model_id through the generic model_root mapper loses the
+    # exl2_model_root and points at the wrong directory.
+    if args.backend not in {"openai", "ollama", "exl2"} and isinstance(args.model_id, str):
         args.model_id = apply_machine_model_root(args.model_id)
     if args.backend == "openai" and not pre_args.model_id:
         args.model_id = ""
@@ -1075,28 +1408,40 @@ def main() -> None:
         return
 
     if args.shutdown_backend:
-        if args.backend != "vllm":
-            print("--shutdown-backend is only supported for the managed vLLM backend.")
-            sys.exit(1)
-        try:
-            result = shutdown_managed_server(args)
-        except Exception as exc:
-            print(f"Failed to shut down managed vLLM backend: {exc}")
-            sys.exit(1)
-        if result.get("stopped"):
-            label = "Managed vLLM stopped" if result.get("control_file") else "vLLM stopped"
-            print(f"{label}: pid={result.get('pid')} base_url={result.get('base_url')} control_file={result.get('control_file')}")
+        if args.backend == "vllm":
+            try:
+                result = shutdown_managed_server(args)
+            except Exception as exc:
+                print(f"Failed to shut down managed vLLM backend: {exc}")
+                sys.exit(1)
+            if result.get("stopped"):
+                label = "Managed vLLM stopped" if result.get("control_file") else "vLLM stopped"
+                print(f"{label}: pid={result.get('pid')} base_url={result.get('base_url')} control_file={result.get('control_file')}")
+                return
+            if result.get("reason") == "ambiguous":
+                print("Multiple active vLLM backends matched. Use --config or model_id to choose one:")
+                for entry in result.get("candidates") or []:
+                    print(
+                        f"  pid={entry.get('pid')} base_url={entry.get('base_url')} "
+                        f"model={entry.get('resolved_model_id')} control_file={entry.get('control_file')}"
+                    )
+                sys.exit(1)
+            print(f"No managed vLLM stopped ({result.get('reason')}): control_file={result.get('control_file')}")
             return
-        if result.get("reason") == "ambiguous":
-            print("Multiple active vLLM backends matched. Use --config or model_id to choose one:")
-            for entry in result.get("candidates") or []:
-                print(
-                    f"  pid={entry.get('pid')} base_url={entry.get('base_url')} "
-                    f"model={entry.get('resolved_model_id')} control_file={entry.get('control_file')}"
-                )
-            sys.exit(1)
-        print(f"No managed vLLM stopped ({result.get('reason')}): control_file={result.get('control_file')}")
-        return
+        if args.backend == "exl2":
+            result = shutdown_exl2_session(args)
+            if result.get("stopped"):
+                print(f"EXL2 session stopped: pid={result.get('pid')}")
+                return
+            if result.get("reason") == "ambiguous":
+                print("Multiple active EXL2 sessions matched. Use --config to choose one:")
+                for entry in result.get("candidates") or []:
+                    print(f"  pid={entry.get('pid')} config={entry.get('config_path')} cmd={entry.get('cmdline')}")
+                sys.exit(1)
+            print(f"No EXL2 session stopped ({result.get('reason')}).")
+            return
+        print("--shutdown-backend is currently supported for managed vLLM and EXL2 sessions.")
+        sys.exit(1)
 
     try:
         if args.backend == "hf":
@@ -1184,7 +1529,11 @@ def main() -> None:
                     print(f"Warning: backend shutdown failed: {exc}")
         return
 
-    print(f"TUI ready (backend={args.backend}). Commands: /exit, /quit, /clear. Ctrl+Q exits TUI only.")
+    print(
+        f"TUI ready (backend={args.backend}). "
+        "Commands: /exit (leave backend running), /quit (shut down backend), /clear. "
+        "Ctrl+Q exits TUI only."
+    )
     app = UnifiedTuiApp(TuiRuntime(session=session, args=args, telemetry=telemetry))
     if args.detach_backend:
         app.shutdown_backend_on_exit = False
@@ -1194,12 +1543,20 @@ def main() -> None:
         if telemetry is not None and telemetry.enabled:
             telemetry.close()
         if not getattr(app, "shutdown_backend_on_exit", True):
+            describe = getattr(session, "describe", None)
+            info = describe() if callable(describe) else {}
+            if not isinstance(info, dict):
+                info = {}
             detacher = getattr(session, "detach", None)
             if callable(detacher):
                 try:
                     detacher()
                 except Exception:
                     pass
+            print(
+                "TUI exited and backend was left running: "
+                f"base_url={info.get('base_url')} pid={info.get('pid')} control_file={info.get('control_file')}"
+            )
         closer = getattr(session, "close", None)
         if callable(closer):
             try:

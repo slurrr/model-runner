@@ -1,10 +1,10 @@
 [model]
-id = ""
+id = "models--google--gemma-4-E4B-it"
 
 [gen]
 stream = true
 max_new_tokens = 8192
-temperature = 0.6
+temperature = 1.0
 top_p = 1.0
 top_k = -1
 min_p = 0.05
