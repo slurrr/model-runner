@@ -580,6 +580,12 @@ class OpenAIHTTPSession:
             dropped_roles.extend(dropped_chunk)
             return True
 
+        config_origins = dict(getattr(self.args, "_config_origins", {}) or {})
+        cli_overrides = set(getattr(self.args, "_cli_overrides", set()) or set())
+
+        def _is_explicit(name: str) -> bool:
+            return name in config_origins or name in cli_overrides
+
         def _run_attempt(*, include_tools: bool):
             router = ThinkRouter(assume_think=self.args.assume_think)
             raw_parts: list[str] = []
@@ -610,11 +616,14 @@ class OpenAIHTTPSession:
             payload: dict[str, object] = {
                 "messages": payload_messages,
                 "stream": True,
-                "max_tokens": self.args.max_new_tokens,
-                "temperature": self.args.temperature,
-                "top_p": self.args.top_p,
                 "stream_options": {"include_usage": True},
             }
+            if _is_explicit("max_new_tokens"):
+                payload["max_tokens"] = self.args.max_new_tokens
+            if _is_explicit("temperature"):
+                payload["temperature"] = self.args.temperature
+            if _is_explicit("top_p"):
+                payload["top_p"] = self.args.top_p
             if self.resolved_model_id:
                 payload["model"] = self.resolved_model_id
             if self.args.stop_strings:
@@ -662,11 +671,13 @@ class OpenAIHTTPSession:
                 if self.args.prompt_logprobs not in (None, 0):
                     payload["prompt_logprobs"] = self.args.prompt_logprobs
 
-            knob_sent = {
-                "max_new_tokens": payload["max_tokens"],
-                "temperature": payload["temperature"],
-                "top_p": payload["top_p"],
-            }
+            knob_sent: dict[str, object] = {}
+            if "max_tokens" in payload:
+                knob_sent["max_new_tokens"] = payload["max_tokens"]
+            if "temperature" in payload:
+                knob_sent["temperature"] = payload["temperature"]
+            if "top_p" in payload:
+                knob_sent["top_p"] = payload["top_p"]
             if "stop" in payload:
                 knob_sent["stop_strings"] = payload["stop"]
             if "seed" in payload:

@@ -1,15 +1,15 @@
 [model]
-id = "models--google--gemma-4-E4B-it"
+id = "models--coder3101--gemma-4-E4B-it-heretic"
 
 [gen]
 stream = true
-max_new_tokens = 8192
-# temperature = 1.0
+max_new_tokens = 16348
+temperature = 1.2
 # top_p = 1.0
-# top_k = -1
-# min_p = 0.05
+top_k = 64
+min_p = 0.05
 # repetition_penalty = 0.0
-# presence_penalty = 0.2
+presence_penalty = 0.75
 # frequency_penalty = 0.0
 stop_strings = []
 stop_token_ids = []
@@ -17,9 +17,9 @@ ignore_eos = false
 min_tokens = 0
 best_of = 1
 use_beam_search = false
-length_penalty = 1.0
+# length_penalty = 1.0
 include_stop_str_in_output = false
-skip_special_tokens = true
+# skip_special_tokens = true
 spaces_between_special_tokens = true
 truncate_prompt_tokens = 0
 allowed_token_ids = []
@@ -49,7 +49,7 @@ jsonl = ""
 sample_interval_s = 1.0
 
 [tools]
-enabled = true
+enabled = false
 mode = "execute"
 tool_choice = "auto"
 schema_file = ""
@@ -71,11 +71,13 @@ timeout_s = 900
 generation_config = "auto"
 attention_backend = ""
 dtype = "bfloat16"
+kv_cache_dtype = "fp8-e4m3"
 performance_mode = "interactivity"
 enable_auto_tool_choice = true
 tool_call_parser = "gemma4"
+reasoning_parser = "gemma4"
 log_file = ""
 served_model_name = ""
 tensor_parallel_size = 1
 gpu_memory_utilization = 0.95
-# max_model_len = 131072
+max_model_len = 131072

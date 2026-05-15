@@ -34,6 +34,9 @@ def _venv_site_packages_dir() -> Path | None:
 
 def _runtime_env() -> dict[str, str]:
     env = os.environ.copy()
+    # Helps reduce CUDA memory fragmentation under long-lived/large-model vLLM runs.
+    # Respect explicit user overrides from the shell.
+    env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
     site_packages = _venv_site_packages_dir()
     if site_packages is None:
         return env

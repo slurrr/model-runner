@@ -1009,6 +1009,7 @@ def create_session(args: argparse.Namespace) -> VLLMSession:
     stderr_fh = open(stderr_path, "w", encoding="utf-8")
     try:
         child_env = os.environ.copy()
+        child_env.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         if launch_env_updates:
             child_env.update(launch_env_updates)
         process = subprocess.Popen(

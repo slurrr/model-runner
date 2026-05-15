@@ -202,21 +202,25 @@ def build_intent_knobs(args, backend: str) -> dict[str, object]:
         if args.stop_strings:
             sent["stop_strings"] = args.stop_strings
     elif backend == "openai":
-        sent = {
-            "max_new_tokens": args.max_new_tokens,
-            "temperature": args.temperature,
-            "top_p": args.top_p,
-        }
+        user_set = user_set_keys(args)
+        if "max_new_tokens" in user_set and args.max_new_tokens is not None:
+            sent["max_new_tokens"] = args.max_new_tokens
+        if "temperature" in user_set and args.temperature is not None:
+            sent["temperature"] = args.temperature
+        if "top_p" in user_set and args.top_p is not None:
+            sent["top_p"] = args.top_p
         if args.stop_strings:
             sent["stop_strings"] = args.stop_strings
         if args.seed is not None:
             sent["seed"] = args.seed
     elif backend == "vllm":
-        sent = {
-            "max_new_tokens": args.max_new_tokens,
-            "temperature": args.temperature,
-            "top_p": args.top_p,
-        }
+        user_set = user_set_keys(args)
+        if "max_new_tokens" in user_set and args.max_new_tokens is not None:
+            sent["max_new_tokens"] = args.max_new_tokens
+        if "temperature" in user_set and args.temperature is not None:
+            sent["temperature"] = args.temperature
+        if "top_p" in user_set and args.top_p is not None:
+            sent["top_p"] = args.top_p
         for key in (
             "top_k",
             "min_p",
@@ -230,6 +234,8 @@ def build_intent_knobs(args, backend: str) -> dict[str, object]:
             "allowed_token_ids",
             "prompt_logprobs",
         ):
+            if key not in user_set:
+                continue
             value = getattr(args, key, None)
             if value not in (None, [], 0, 0.0):
                 sent[key] = value

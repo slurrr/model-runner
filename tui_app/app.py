@@ -7,10 +7,14 @@ import json
 import os
 import queue
 import shlex
+import shutil
+import subprocess
 import threading
 import time
 from dataclasses import dataclass
 from typing import Callable
+from urllib import error as urllib_error
+from urllib import request as urllib_request
 
 from rich.text import Text
 from textual.app import App, ComposeResult
@@ -513,6 +517,8 @@ class UnifiedTuiApp(App):
         self._telemetry_status = "finished"
         self._pending_turn_started_at: float | None = None
         self._pending_turn_first_token_at: float | None = None
+        self._last_assistant_answer: str = ""
+        self._last_tts_audio_path: str = ""
 
     def compose(self) -> ComposeResult:
         self.transcript = TranscriptPane(id="transcript")
@@ -839,6 +845,7 @@ class UnifiedTuiApp(App):
             ShowTopic("env", "Environment summary", "/show env", UnifiedTuiApp._show_env),
             ShowTopic("args", "Parsed CLI args", "/show args", UnifiedTuiApp._show_args),
             ShowTopic("aliases", "Alias map for slash commands/topics", "/show aliases", UnifiedTuiApp._show_aliases),
+            ShowTopic("tts", "TTS runtime settings and state", "/show tts", UnifiedTuiApp._show_tts),
         ]
         self.show_topics = {topic.name: topic for topic in topics}
         self.show_aliases = {
@@ -860,6 +867,7 @@ class UnifiedTuiApp(App):
             "backend": "backend",
             "tools": "tools",
             "aliases": "aliases",
+            "tts": "tts",
             "logs": "logs",
             "request": "request",
         }
@@ -948,6 +956,15 @@ class UnifiedTuiApp(App):
                 examples=("/file ./notes.txt", "/file list", "/file clear"),
             )
         )
+        self.registry.register(
+            SlashCommand(
+                name="tts",
+                summary="Configure and test Kokoro/OpenAI-compatible TTS",
+                usage="/tts [on|off|voices|voice <id>|speed <n>|autoplay on|off|test [text]|replay]",
+                handler=UnifiedTuiApp._cmd_tts,
+                read_only=False,
+            )
+        )
         for alias_name in (
             "model",
             "config",
@@ -1017,7 +1034,7 @@ class UnifiedTuiApp(App):
                     "Prompt + Session",
                 ]
             )
-            lines.extend(_format_name_grid(["/system", "/prefix", "/image", "/file"], cols=4, min_width=18))
+            lines.extend(_format_name_grid(["/system", "/prefix", "/image", "/file", "/tts"], cols=4, min_width=18))
             lines.extend(
                 [
                     "",
@@ -1291,6 +1308,161 @@ class UnifiedTuiApp(App):
             return "Usage: /toolblocks [on|off|toggle]"
         self.runtime.args.show_tool_activity = current
         return f"show_tool_activity: {current}"
+
+    def _tts_output_dir(self) -> str:
+        root = os.path.join(os.path.expanduser("~"), "runs", "model-runner", "outputs", "tts")
+        os.makedirs(root, exist_ok=True)
+        return root
+
+    def _tts_fetch_voices(self) -> list[str]:
+        base = str(getattr(self.runtime.args, "tts_base_url", "http://127.0.0.1:8880") or "").rstrip("/")
+        url = f"{base}/v1/audio/voices"
+        req = urllib_request.Request(url=url, method="GET")
+        with urllib_request.urlopen(req, timeout=15) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        if isinstance(payload, dict):
+            voices = payload.get("voices")
+            if isinstance(voices, list):
+                return [str(v) for v in voices if str(v).strip()]
+            data = payload.get("data")
+            if isinstance(data, list):
+                out: list[str] = []
+                for item in data:
+                    if isinstance(item, str):
+                        out.append(item)
+                    elif isinstance(item, dict):
+                        voice = item.get("id") or item.get("name")
+                        if voice:
+                            out.append(str(voice))
+                return [v for v in out if v.strip()]
+        return []
+
+    def _tts_synthesize_to_file(self, text: str, *, voice: str, speed: float) -> str:
+        base = str(getattr(self.runtime.args, "tts_base_url", "http://127.0.0.1:8880") or "").rstrip("/")
+        model = str(getattr(self.runtime.args, "tts_model", "kokoro") or "kokoro")
+        payload = {
+            "model": model,
+            "input": text,
+            "voice": voice,
+            "response_format": "wav",
+            "speed": float(speed),
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib_request.Request(
+            url=f"{base}/v1/audio/speech",
+            data=body,
+            headers={"content-type": "application/json"},
+            method="POST",
+        )
+        with urllib_request.urlopen(req, timeout=120) as resp:
+            audio = resp.read()
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        dest = os.path.join(self._tts_output_dir(), f"tts-{stamp}-{int(time.time()*1000)%1000:03d}.wav")
+        with open(dest, "wb") as fh:
+            fh.write(audio)
+        self._last_tts_audio_path = dest
+        return dest
+
+    def _tts_play_file(self, path: str) -> tuple[bool, str]:
+        candidates: list[list[str]] = []
+        if shutil.which("ffplay"):
+            candidates.append(["ffplay", "-nodisp", "-autoexit", "-loglevel", "error", path])
+        if shutil.which("paplay"):
+            candidates.append(["paplay", path])
+        if shutil.which("aplay"):
+            candidates.append(["aplay", path])
+        if not candidates:
+            return False, "No audio player found (ffplay/paplay/aplay)."
+        for cmd in candidates:
+            try:
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return True, f"Playing via {cmd[0]}"
+            except Exception:
+                continue
+        return False, "Could not launch local audio player."
+
+    def _tts_speak_text(self, text: str, *, autoplay: bool = True) -> tuple[bool, str]:
+        text = (text or "").strip()
+        if not text:
+            return False, "No text to speak."
+        voice = str(getattr(self.runtime.args, "tts_voice", "af_heart") or "af_heart")
+        speed = float(getattr(self.runtime.args, "tts_speed", 1.0) or 1.0)
+        try:
+            wav_path = self._tts_synthesize_to_file(text, voice=voice, speed=speed)
+        except urllib_error.HTTPError as exc:
+            return False, f"TTS request failed: HTTP {exc.code}"
+        except Exception as exc:
+            return False, f"TTS request failed: {exc}"
+        if not autoplay:
+            return True, f"Generated: {wav_path}"
+        ok, msg = self._tts_play_file(wav_path)
+        if ok:
+            return True, f"{msg} | {wav_path}"
+        return True, f"Generated but not playing: {wav_path} ({msg})"
+
+    def _tts_autoplay_last_answer_async(self, text: str) -> None:
+        def worker() -> None:
+            self._tts_speak_text(text, autoplay=bool(getattr(self.runtime.args, "tts_autoplay", True)))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _cmd_tts(self, argv: list[str]) -> str:
+        args = self.runtime.args
+        if not argv:
+            return self._show_tts([])
+
+        token = argv[0].strip().lower()
+        if token in {"on", "off"}:
+            args.tts_enabled = token == "on"
+            if args.tts_enabled:
+                args.tts_autoplay = True
+            return f"tts_enabled: {bool(args.tts_enabled)}\ntts_autoplay: {bool(args.tts_autoplay)}"
+
+        if token == "autoplay":
+            if len(argv) < 2 or argv[1].strip().lower() not in {"on", "off"}:
+                return "Usage: /tts autoplay on|off"
+            args.tts_autoplay = argv[1].strip().lower() == "on"
+            return f"tts_autoplay: {bool(args.tts_autoplay)}"
+
+        if token == "voice":
+            if len(argv) < 2:
+                return "Usage: /tts voice <voice_id>"
+            args.tts_voice = argv[1].strip()
+            return f"tts_voice: {args.tts_voice}"
+
+        if token == "speed":
+            if len(argv) < 2:
+                return "Usage: /tts speed <float>"
+            try:
+                speed = float(argv[1])
+            except ValueError:
+                return "Invalid speed. Example: /tts speed 0.95"
+            args.tts_speed = speed
+            return f"tts_speed: {args.tts_speed:.2f}"
+
+        if token == "voices":
+            try:
+                voices = self._tts_fetch_voices()
+            except Exception as exc:
+                return f"Voice fetch failed: {exc}"
+            if not voices:
+                return "No voices returned."
+            lines = [f"voices ({len(voices)}):"]
+            lines.extend(f"  {v}" for v in voices)
+            return "\n".join(lines)
+
+        if token == "test":
+            text = " ".join(argv[1:]).strip() or "Hello from model-runner TTS test."
+            ok, msg = self._tts_speak_text(text, autoplay=bool(getattr(args, "tts_autoplay", True)))
+            return msg if ok else f"TTS test failed: {msg}"
+
+        if token == "replay":
+            if not self._last_assistant_answer.strip():
+                return "No assistant answer available to replay yet."
+            ok, msg = self._tts_speak_text(self._last_assistant_answer, autoplay=bool(getattr(args, "tts_autoplay", True)))
+            return msg if ok else f"Replay failed: {msg}"
+
+        return "Usage: /tts [on|off|voices|voice <id>|speed <n>|autoplay on|off|test [text]|replay]"
 
     def _cmd_clear(self, argv: list[str]) -> str:
         del argv
@@ -2238,6 +2410,31 @@ class UnifiedTuiApp(App):
                 lines.append(f"  {name}: source={item['source']} executable={item['executable']}")
         return self._to_json_or_lines(data, lines)
 
+    def _show_tts(self, argv: list[str]) -> str:
+        del argv
+        args = self.runtime.args
+        data = {
+            "enabled": bool(getattr(args, "tts_enabled", False)),
+            "autoplay": bool(getattr(args, "tts_autoplay", True)),
+            "base_url": str(getattr(args, "tts_base_url", "http://127.0.0.1:8880") or ""),
+            "model": str(getattr(args, "tts_model", "kokoro") or "kokoro"),
+            "voice": str(getattr(args, "tts_voice", "af_heart") or "af_heart"),
+            "speed": float(getattr(args, "tts_speed", 1.0) or 1.0),
+            "last_audio_path": self._last_tts_audio_path or "",
+        }
+        lines = [
+            f"tts.enabled: {data['enabled']}",
+            f"tts.autoplay: {data['autoplay']}",
+            f"tts.base_url: {data['base_url']}",
+            f"tts.model: {data['model']}",
+            f"tts.voice: {data['voice']}",
+            f"tts.speed: {data['speed']:.2f}",
+            f"tts.last_audio_path: {data['last_audio_path'] or '(none)'}",
+            "",
+            "Commands: /tts voices | /tts voice <id> | /tts speed <n> | /tts on|off | /tts test [text] | /tts replay",
+        ]
+        return self._to_json_or_lines(data, lines)
+
     def _show_logs(self, argv: list[str]) -> str:
         n = 0
         filt = ""
@@ -2435,6 +2632,9 @@ class UnifiedTuiApp(App):
                 else:
                     assistant_for_history = record.answer if record.answer else record.think
                     self.messages.append({"role": "assistant", "content": assistant_for_history})
+                self._last_assistant_answer = str(record.answer or "")
+                if bool(getattr(self.runtime.args, "tts_enabled", False)) and self._last_assistant_answer.strip():
+                    self._tts_autoplay_last_answer_async(self._last_assistant_answer)
                 self.turn_records.append(record)
                 if self.runtime.args.save_transcript:
                     self._append_transcript_record(record)

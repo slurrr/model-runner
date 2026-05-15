@@ -13,14 +13,7 @@ import threading
 import time
 
 from config_utils import apply_machine_model_root, load_config_layers, load_default_config_layers_for_model
-from tui_app.app import TuiRuntime, UnifiedTuiApp
-from tui_app.backends.exl2 import create_session as create_exl2_session
-from tui_app.backends.gguf import create_session as create_gguf_session
-from tui_app.backends.hf import create_session as create_hf_session
-from tui_app.backends.ollama import create_session as create_ollama_session
-from tui_app.backends.openai import create_session as create_openai_session
-from tui_app.backends.vllm import create_session as create_vllm_session, list_managed_servers, shutdown_managed_server
-from tui_app.telemetry import TelemetryContext, attach_log_subscribers
+from tui_app.backends.vllm import list_managed_servers, shutdown_managed_server
 from tui_app.transports.openai_http import normalize_openai_base_url, resolve_model_once
 
 
@@ -245,6 +238,14 @@ def _extract_flag_value(command: list[object], flag: str) -> str:
     return ""
 
 
+def _extract_first_flag_value(command: list[object], flags: tuple[str, ...]) -> str:
+    for flag in flags:
+        value = _extract_flag_value(command, flag)
+        if value:
+            return value
+    return ""
+
+
 def _agentmux_active_path() -> str:
     return os.path.join(os.path.expanduser("~"), "runs", "agentmux", "state", "active.json")
 
@@ -310,6 +311,69 @@ def _list_agentmux_vllm_processes() -> list[dict[str, object]]:
                 "host": host,
                 "port": port,
                 "served_model_name": served_model_name,
+                "service_name": service_name,
+                "source": "ps",
+            }
+        )
+    return entries
+
+
+def _list_agentmux_llama_cpp_processes() -> list[dict[str, object]]:
+    entries: list[dict[str, object]] = []
+    try:
+        output = subprocess.check_output(["ps", "-eo", "pid=,args="], text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        return entries
+
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split(None, 1)
+        if len(parts) != 2:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        if pid == os.getpid():
+            continue
+
+        cmdline = parts[1]
+        if "llama-server" not in cmdline:
+            continue
+        try:
+            argv = shlex.split(cmdline)
+        except ValueError:
+            continue
+
+        host = _extract_first_flag_value(argv, ("--host",)).strip() or "127.0.0.1"
+        if host == "0.0.0.0":
+            host = "127.0.0.1"
+        port_text = _extract_first_flag_value(argv, ("--port",)).strip()
+        try:
+            port = int(port_text)
+        except (TypeError, ValueError):
+            port = 0
+        if port <= 0:
+            continue
+
+        alias = _extract_first_flag_value(argv, ("--alias",)).strip()
+        model_path = _extract_first_flag_value(argv, ("-m", "--model")).strip()
+        service_name = "main"
+        for candidate in (alias, os.path.basename(model_path)):
+            text = (candidate or "").strip()
+            if text:
+                service_name = _slug_path_part(text, "main")
+                break
+
+        entries.append(
+            {
+                "pid": pid,
+                "host": host,
+                "port": port,
+                "alias": alias,
+                "model_path": model_path,
                 "service_name": service_name,
                 "source": "ps",
             }
@@ -392,13 +456,15 @@ def _discover_attachable_backends() -> list[dict[str, object]]:
                     command = service.get("command")
                     command_items = command if isinstance(command, list) else []
                     rendered = " ".join(str(item) for item in command_items)
-                    if "vllm" not in rendered or "serve" not in rendered:
+                    is_vllm = "vllm" in rendered and "serve" in rendered
+                    is_llama_cpp = "llama-server" in rendered
+                    if not (is_vllm or is_llama_cpp):
                         continue
                     service_name = str(service.get("name") or "").strip() or "service"
-                    host = _extract_flag_value(command_items, "--host").strip() or "127.0.0.1"
+                    host = _extract_first_flag_value(command_items, ("--host",)).strip() or "127.0.0.1"
                     if host == "0.0.0.0":
                         host = "127.0.0.1"
-                    port_text = _extract_flag_value(command_items, "--port").strip()
+                    port_text = _extract_first_flag_value(command_items, ("--port",)).strip()
                     port = int(port_text or service.get("port") or 0)
                     if port <= 0:
                         continue
@@ -411,9 +477,10 @@ def _discover_attachable_backends() -> list[dict[str, object]]:
                     except Exception:
                         continue
                     seen_urls.add(normalized_url)
+                    backend_kind = "agentmux-llama-cpp" if is_llama_cpp else "agentmux"
                     entries.append(
                         {
-                            "kind": "agentmux",
+                            "kind": backend_kind,
                             "backend": "openai",
                             "base_url": normalized_url,
                             "resolved_model_id": resolved_model_id,
@@ -455,6 +522,38 @@ def _discover_attachable_backends() -> list[dict[str, object]]:
                 "control_file": active_path,
                 "port": port,
                 "selector": _agentmux_attach_selector("agentmux", service_name, port),
+            }
+        )
+
+    for process in _list_agentmux_llama_cpp_processes():
+        host = str(process.get("host") or "127.0.0.1").strip() or "127.0.0.1"
+        port = int(process.get("port") or 0)
+        pid = int(process.get("pid") or 0)
+        if port <= 0 or pid <= 0:
+            continue
+        base_url = f"http://{host}:{port}"
+        normalized_url = normalize_openai_base_url(base_url)
+        if not normalized_url or normalized_url in seen_urls:
+            continue
+        try:
+            resolved_model_id = resolve_model_once(normalized_url, timeout_s=2.0, api_key="")
+        except Exception:
+            continue
+        seen_urls.add(normalized_url)
+        service_name = str(process.get("service_name") or "main")
+        label_name = str(process.get("alias") or resolved_model_id or service_name).strip()
+        entries.append(
+            {
+                "kind": "llama-cpp",
+                "backend": "openai",
+                "base_url": normalized_url,
+                "resolved_model_id": resolved_model_id,
+                "label": f"llama-cpp/{label_name}",
+                "source": "llama.cpp process scan",
+                "pid": pid,
+                "control_file": active_path,
+                "port": port,
+                "selector": _agentmux_attach_selector("llama-cpp", service_name, port),
             }
         )
 
@@ -766,6 +865,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--openai-api-key", default="")
     parser.add_argument("--openai-timeout-s", type=int, default=600)
     parser.add_argument("--openai-log-file", default="")
+
+    tts_enabled_group = parser.add_mutually_exclusive_group()
+    tts_enabled_group.add_argument("--tts-enabled", dest="tts_enabled", action="store_true")
+    tts_enabled_group.add_argument("--no-tts-enabled", dest="tts_enabled", action="store_false")
+    tts_autoplay_group = parser.add_mutually_exclusive_group()
+    tts_autoplay_group.add_argument("--tts-autoplay", dest="tts_autoplay", action="store_true")
+    tts_autoplay_group.add_argument("--no-tts-autoplay", dest="tts_autoplay", action="store_false")
+    parser.add_argument("--tts-base-url", default="http://127.0.0.1:8880")
+    parser.add_argument("--tts-model", default="kokoro")
+    parser.add_argument("--tts-voice", default="af_heart")
+    parser.add_argument("--tts-speed", type=float, default=1.0)
+
     parser.add_argument("--vllm-mode", choices=["managed"], default="managed")
     parser.add_argument("--vllm-host", default="127.0.0.1")
     parser.add_argument("--vllm-port", type=int, default=8000)
@@ -797,6 +908,8 @@ def build_parser() -> argparse.ArgumentParser:
         tools_enabled=False,
         show_tool_activity=False,
         show_tool_arguments=False,
+        tts_enabled=False,
+        tts_autoplay=True,
     )
     parser.set_defaults(
         flash_attn=None,
@@ -917,6 +1030,12 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "openai_api_key",
         "openai_timeout_s",
         "openai_log_file",
+        "tts_enabled",
+        "tts_autoplay",
+        "tts_base_url",
+        "tts_model",
+        "tts_voice",
+        "tts_speed",
         "vllm_mode",
         "vllm_host",
         "vllm_port",
@@ -998,6 +1117,14 @@ def _detect_cli_overrides(argv: list[str]) -> set[str]:
         "--openai-api-key": "openai_api_key",
         "--openai-timeout-s": "openai_timeout_s",
         "--openai-log-file": "openai_log_file",
+        "--tts-enabled": "tts_enabled",
+        "--no-tts-enabled": "tts_enabled",
+        "--tts-autoplay": "tts_autoplay",
+        "--no-tts-autoplay": "tts_autoplay",
+        "--tts-base-url": "tts_base_url",
+        "--tts-model": "tts_model",
+        "--tts-voice": "tts_voice",
+        "--tts-speed": "tts_speed",
         "--vllm-mode": "vllm_mode",
         "--vllm-host": "vllm_host",
         "--vllm-port": "vllm_port",
@@ -1174,6 +1301,12 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
         "capture_last_request",
         "telemetry_jsonl",
         "telemetry_sample_interval_s",
+        "tts_enabled",
+        "tts_autoplay",
+        "tts_base_url",
+        "tts_model",
+        "tts_voice",
+        "tts_speed",
     }
 
     used = common | backend_relevant[backend]
@@ -1442,6 +1575,15 @@ def main() -> None:
             return
         print("--shutdown-backend is currently supported for managed vLLM and EXL2 sessions.")
         sys.exit(1)
+
+    from tui_app.app import TuiRuntime, UnifiedTuiApp
+    from tui_app.backends.exl2 import create_session as create_exl2_session
+    from tui_app.backends.gguf import create_session as create_gguf_session
+    from tui_app.backends.hf import create_session as create_hf_session
+    from tui_app.backends.ollama import create_session as create_ollama_session
+    from tui_app.backends.openai import create_session as create_openai_session
+    from tui_app.backends.vllm import create_session as create_vllm_session
+    from tui_app.telemetry import TelemetryContext, attach_log_subscribers
 
     try:
         if args.backend == "hf":
