@@ -9,6 +9,7 @@ import shlex
 import signal
 import subprocess
 import sys
+from urllib import request as urllib_request
 import threading
 import time
 
@@ -574,6 +575,51 @@ def _discover_attachable_backends() -> list[dict[str, object]]:
         label = str(merged.get("vllm_served_model_name") or merged.get("model_id") or os.path.basename(os.path.dirname(os.path.dirname(cfg_path)))).strip()
         _add(base_url, label=label, source=str(meta.get("base") or cfg_path), require_model_match=True)
 
+    # agent-session-srv sessions (voice-stack)
+    session_base_url = os.environ.get("SESSION_BASE_URL", "http://127.0.0.1:8892").strip().rstrip("/")
+    session_root = os.path.join(os.path.expanduser("~"), "runs", "agent-session-srv", "sessions")
+    if os.path.isdir(session_root):
+        for sess_dir in sorted(glob.glob(os.path.join(session_root, "sess_*"))):
+            state_path = os.path.join(sess_dir, "state.json")
+            if not os.path.isfile(state_path):
+                continue
+            try:
+                with open(state_path, "r", encoding="utf-8") as fh:
+                    state = json.load(fh)
+            except Exception:
+                continue
+            if not isinstance(state, dict):
+                continue
+            sid = str(state.get("id") or os.path.basename(sess_dir)).strip()
+            backend = state.get("backend") if isinstance(state.get("backend"), dict) else {}
+            backend_base = normalize_openai_base_url(str(backend.get("base_url") or "").strip()) if isinstance(backend, dict) else ""
+            backend_model = str(backend.get("model") or "").strip() if isinstance(backend, dict) else ""
+            if not sid or not backend_base:
+                continue
+
+            # Filter out stale on-disk sessions that are not loaded in current session-srv process.
+            try:
+                req = urllib_request.Request(url=f"{session_base_url}/v1/sessions/{sid}", method="GET")
+                with urllib_request.urlopen(req, timeout=1.5) as resp:
+                    if int(getattr(resp, "status", 0) or 0) != 200:
+                        continue
+            except Exception:
+                continue
+
+            entries.append(
+                {
+                    "kind": "session",
+                    "backend": "openai",
+                    "base_url": backend_base,
+                    "resolved_model_id": backend_model,
+                    "label": f"session/{sid}",
+                    "source": state_path,
+                    "session_id": sid,
+                    "session_base_url": session_base_url,
+                    "selector": f"attach:session-{sid}",
+                }
+            )
+
     entries.sort(key=lambda item: (str(item.get("kind") or ""), str(item.get("label") or ""), str(item.get("base_url") or "")))
     return entries
 
@@ -866,6 +912,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--openai-timeout-s", type=int, default=600)
     parser.add_argument("--openai-log-file", default="")
 
+    parser.add_argument("--session-base-url", default="")
+    parser.add_argument("--session-id", default="")
+
     tts_enabled_group = parser.add_mutually_exclusive_group()
     tts_enabled_group.add_argument("--tts-enabled", dest="tts_enabled", action="store_true")
     tts_enabled_group.add_argument("--no-tts-enabled", dest="tts_enabled", action="store_false")
@@ -876,6 +925,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tts-model", default="kokoro")
     parser.add_argument("--tts-voice", default="af_heart")
     parser.add_argument("--tts-speed", type=float, default=1.0)
+
+    stt_enabled_group = parser.add_mutually_exclusive_group()
+    stt_enabled_group.add_argument("--stt-enabled", dest="stt_enabled", action="store_true")
+    stt_enabled_group.add_argument("--no-stt-enabled", dest="stt_enabled", action="store_false")
+    parser.add_argument("--stt-base-url", default="http://127.0.0.1:8891")
+    parser.add_argument("--stt-model", default="whisper-1")
+    parser.add_argument("--stt-language", default="auto")
 
     parser.add_argument("--vllm-mode", choices=["managed"], default="managed")
     parser.add_argument("--vllm-host", default="127.0.0.1")
@@ -910,6 +966,7 @@ def build_parser() -> argparse.ArgumentParser:
         show_tool_arguments=False,
         tts_enabled=False,
         tts_autoplay=True,
+        stt_enabled=False,
     )
     parser.set_defaults(
         flash_attn=None,
@@ -1030,12 +1087,18 @@ def _collect_config_defaults(config_data: dict | None) -> dict:
         "openai_api_key",
         "openai_timeout_s",
         "openai_log_file",
+        "session_base_url",
+        "session_id",
         "tts_enabled",
         "tts_autoplay",
         "tts_base_url",
         "tts_model",
         "tts_voice",
         "tts_speed",
+        "stt_enabled",
+        "stt_base_url",
+        "stt_model",
+        "stt_language",
         "vllm_mode",
         "vllm_host",
         "vllm_port",
@@ -1117,6 +1180,8 @@ def _detect_cli_overrides(argv: list[str]) -> set[str]:
         "--openai-api-key": "openai_api_key",
         "--openai-timeout-s": "openai_timeout_s",
         "--openai-log-file": "openai_log_file",
+        "--session-base-url": "session_base_url",
+        "--session-id": "session_id",
         "--tts-enabled": "tts_enabled",
         "--no-tts-enabled": "tts_enabled",
         "--tts-autoplay": "tts_autoplay",
@@ -1125,6 +1190,11 @@ def _detect_cli_overrides(argv: list[str]) -> set[str]:
         "--tts-model": "tts_model",
         "--tts-voice": "tts_voice",
         "--tts-speed": "tts_speed",
+        "--stt-enabled": "stt_enabled",
+        "--no-stt-enabled": "stt_enabled",
+        "--stt-base-url": "stt_base_url",
+        "--stt-model": "stt_model",
+        "--stt-language": "stt_language",
         "--vllm-mode": "vllm_mode",
         "--vllm-host": "vllm_host",
         "--vllm-port": "vllm_port",
@@ -1301,12 +1371,18 @@ def _warn_ignored_flags(parser: argparse.ArgumentParser, args: argparse.Namespac
         "capture_last_request",
         "telemetry_jsonl",
         "telemetry_sample_interval_s",
+        "session_base_url",
+        "session_id",
         "tts_enabled",
         "tts_autoplay",
         "tts_base_url",
         "tts_model",
         "tts_voice",
         "tts_speed",
+        "stt_enabled",
+        "stt_base_url",
+        "stt_model",
+        "stt_language",
     }
 
     used = common | backend_relevant[backend]
@@ -1340,6 +1416,8 @@ def parse_args() -> argparse.Namespace:
     pre.add_argument("--shutdown-backend", action="store_true")
     pre.add_argument("--config", default="")
     pre.add_argument("--profile", default="")
+    pre.add_argument("--session-base-url", default="")
+    pre.add_argument("--session-id", default="")
     pre_args, _ = pre.parse_known_args(raw_argv)
 
     if (
@@ -1424,6 +1502,14 @@ def parse_args() -> argparse.Namespace:
         args.model_id = args.model_id or ""
         args._config_path = config_path
         return args
+
+    if str(getattr(args, "session_base_url", "") or "").strip() and str(getattr(args, "session_id", "") or "").strip():
+        # Session mode: transport is handled via session-srv in the TUI app.
+        # Avoid requiring a local model_id/backend selection.
+        args.backend = "openai"
+        args.model_id = ""
+        args._config_path = config_path
+        return args
     attach_entry = None
     if isinstance(args.model_id, str) and args.model_id.startswith("attach:"):
         attach_entry = _resolve_attachable_backend(args.model_id)
@@ -1432,6 +1518,9 @@ def parse_args() -> argparse.Namespace:
         args.backend = "openai"
         args.openai_base_url = str(attach_entry.get("base_url") or "")
         args.model_id = str(attach_entry.get("resolved_model_id") or "")
+        if str(attach_entry.get("kind") or "") == "session":
+            args.session_base_url = str(attach_entry.get("session_base_url") or "http://127.0.0.1:8892")
+            args.session_id = str(attach_entry.get("session_id") or "")
         args._attach_entry = attach_entry
         args._config_path = None
         return args

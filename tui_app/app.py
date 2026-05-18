@@ -1,20 +1,25 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 from collections import deque
 import difflib
 import json
+import mimetypes
 import os
 import queue
+import re
 import shlex
 import shutil
 import subprocess
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from typing import Callable
 from urllib import error as urllib_error
 from urllib import request as urllib_request
+from urllib.parse import urlencode
 
 from rich.text import Text
 from textual.app import App, ComposeResult
@@ -28,6 +33,7 @@ from tui_app.backends.base import BackendSession, Event
 from tui_app.events import AnswerDelta, Error, Finish, Meta, ThinkDelta, TurnStart
 from tui_app.knobs import build_intent_knobs
 from tui_app.telemetry import TelemetryContext, build_runtime_sample_payload
+from tui_app.think_router import ThinkRouter
 from tui_app.tools import build_tool_runtime
 
 
@@ -482,6 +488,7 @@ class UnifiedTuiApp(App):
         Binding("enter", "submit_prompt", "Send", priority=True),
         Binding("shift+enter", "insert_newline", "New line", priority=True),
         Binding("ctrl+j", "insert_newline", "New line", priority=True),
+        Binding("ctrl+r", "stt_toggle_record", "STT record toggle", priority=True),
         Binding("pageup", "scroll_page_up", "Scroll up", priority=True),
         Binding("pagedown", "scroll_page_down", "Scroll down", priority=True),
         Binding("home", "scroll_home", "Scroll top", priority=True),
@@ -519,6 +526,21 @@ class UnifiedTuiApp(App):
         self._pending_turn_first_token_at: float | None = None
         self._last_assistant_answer: str = ""
         self._last_tts_audio_path: str = ""
+        self._last_stt_audio_path: str = ""
+        self._last_stt_text: str = ""
+        self._session_event_thread: threading.Thread | None = None
+        self._session_assistants: dict[str, AssistantMessage] = {}
+        self._session_think_routers: dict[str, ThinkRouter] = {}
+        self._session_answer_accum: dict[str, str] = {}
+        self._stt_recording: bool = False
+        self._stt_record_proc: subprocess.Popen | None = None
+        self._stt_record_path: str = ""
+        self._stt_record_err_path: str = ""
+        self._stt_last_backend: str = ""
+        self._stt_busy: bool = False
+        self._stt_started_at: float = 0.0
+        self._stt_last_toggle_at: float = 0.0
+        self._tui_log_path: str = os.path.join(os.path.expanduser("~"), "runs", "model-runner", "tui.log")
 
     def compose(self) -> ComposeResult:
         self.transcript = TranscriptPane(id="transcript")
@@ -544,12 +566,30 @@ class UnifiedTuiApp(App):
         self.call_after_refresh(self._scroll_to_end_now)
         # Keep typing flow immediate: start with the input focused.
         self.query_one("#chat-input", TextArea).focus()
+        self._maybe_start_session_event_listener()
 
     def on_unmount(self):
         telemetry = self.runtime.telemetry
         if telemetry is not None and telemetry.enabled and not self._telemetry_finished:
             telemetry.publish_session_finished(status=self._telemetry_status)
             self._telemetry_finished = True
+
+    def _log_tui(self, message: str) -> None:
+        try:
+            os.makedirs(os.path.dirname(self._tui_log_path), exist_ok=True)
+            if os.path.isfile(self._tui_log_path) and os.path.getsize(self._tui_log_path) > 2 * 1024 * 1024:
+                rotated = self._tui_log_path + ".1"
+                try:
+                    if os.path.isfile(rotated):
+                        os.remove(rotated)
+                except Exception:
+                    pass
+                os.replace(self._tui_log_path, rotated)
+            stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            with open(self._tui_log_path, "a", encoding="utf-8") as fh:
+                fh.write(f"[{stamp}] {message}\n")
+        except Exception:
+            pass
 
     def _emit_runtime_sample(self) -> None:
         telemetry = self.runtime.telemetry
@@ -615,6 +655,186 @@ class UnifiedTuiApp(App):
         input_box = self.query_one("#chat-input", TextArea)
         input_box.insert("\n")
 
+    async def action_stt_toggle_record(self):
+        args = self.runtime.args
+        now = time.time()
+        if now - self._stt_last_toggle_at < 0.35:
+            return
+        self._stt_last_toggle_at = now
+
+        if self._stt_busy:
+            self.notify("STT busy: finishing previous action.", severity="warning")
+            self._log_tui("stt_toggle ignored: busy")
+            return
+        if not bool(getattr(args, "stt_enabled", False)):
+            self.notify("STT is off. Run /stt on first.", severity="warning")
+            self._log_tui("stt_toggle rejected: stt disabled")
+            return
+        if self.is_generating:
+            self.notify("Wait for current generation to finish.", severity="warning")
+            self._log_tui("stt_toggle rejected: generation in progress")
+            return
+        if not self._stt_recording:
+            ok, msg = self._stt_start_recording()
+            if ok:
+                self.notify(f"Recording… press Ctrl+R again to stop and send. ({msg})")
+                self._log_tui(f"stt_record_start path={msg}")
+            else:
+                self.notify(msg, severity="error")
+                self._log_tui(f"stt_record_start_failed: {msg}")
+            return
+
+        self._stt_busy = True
+        self._log_tui("stt_record_stop requested")
+        try:
+            ok, msg = await asyncio.to_thread(self._stt_stop_recording_and_transcribe_send)
+        finally:
+            self._stt_busy = False
+        if ok:
+            self.notify(msg)
+            self._log_tui(f"stt_record_stop_ok: {msg}")
+        else:
+            self.notify(msg, severity="error")
+            self._log_tui(f"stt_record_stop_failed: {msg}")
+
+    def _stt_start_recording(self) -> tuple[bool, str]:
+        if self._stt_recording:
+            return False, "Already recording."
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        uniq = int(time.time() * 1000) % 1000
+        path = os.path.join(self._stt_output_dir(), f"stt-rec-{stamp}-{uniq:03d}.wav")
+        err_path = os.path.join(self._stt_output_dir(), f"stt-rec-{stamp}-{uniq:03d}.stderr.log")
+
+        candidates: list[tuple[str, list[str], bool]] = []
+        if shutil.which("arecord"):
+            candidates.append(("arecord", ["arecord", "-f", "S16_LE", "-r", "16000", "-c", "1", path], False))
+        if shutil.which("ffmpeg"):
+            candidates.append((
+                "ffmpeg-pulse",
+                [
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-f", "pulse", "-i", "default",
+                    "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", path,
+                ],
+                True,
+            ))
+            candidates.append((
+                "ffmpeg-alsa",
+                [
+                    "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+                    "-f", "alsa", "-i", "default",
+                    "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "wav", path,
+                ],
+                True,
+            ))
+
+        if not candidates:
+            return False, "No recorder found (ffmpeg or arecord)."
+
+        last_err = ""
+        for backend_name, cmd, ffmpeg_mode in candidates:
+            try:
+                err_fh = open(err_path, "ab")
+                proc = subprocess.Popen(
+                    cmd,
+                    stdin=subprocess.PIPE if ffmpeg_mode else subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=err_fh,
+                )
+            except Exception as exc:
+                last_err = str(exc)
+                self._log_tui(f"stt_start_failed backend={backend_name} err={last_err}")
+                continue
+
+            time.sleep(0.2)
+            if proc.poll() is not None:
+                err_tail = ""
+                try:
+                    with open(err_path, "rb") as fh:
+                        err_tail = fh.read()[-600:].decode("utf-8", errors="replace").strip()
+                except Exception:
+                    pass
+                last_err = err_tail or f"exit={proc.returncode}"
+                self._log_tui(f"stt_start_failed backend={backend_name} rc={proc.returncode} err={last_err}")
+                continue
+
+            self._stt_record_proc = proc
+            self._stt_record_path = path
+            self._stt_record_err_path = err_path
+            self._stt_last_backend = backend_name
+            self._stt_recording = True
+            self._stt_started_at = time.time()
+            self._log_tui(f"stt_start backend={backend_name} path={path} err={err_path} pid={proc.pid}")
+            return True, path
+
+        return False, "Recorder unavailable. See ~/runs/model-runner/tui.log"
+
+    def _stt_stop_recording_and_transcribe_send(self) -> tuple[bool, str]:
+        proc = self._stt_record_proc
+        path = self._stt_record_path
+        err_path = self._stt_record_err_path
+        self._stt_record_proc = None
+        self._stt_record_path = ""
+        self._stt_record_err_path = ""
+        self._stt_recording = False
+        if proc is None or not path:
+            self._log_tui("stt_stop: no active recording")
+            return False, "No active recording."
+        try:
+            if proc.stdin is not None:
+                try:
+                    proc.stdin.write(b"q\n")
+                    proc.stdin.flush()
+                except Exception:
+                    pass
+            else:
+                proc.terminate()
+            proc.wait(timeout=4)
+        except Exception:
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
+        duration_s = max(0.0, time.time() - float(self._stt_started_at or 0.0))
+        for _ in range(20):
+            if os.path.isfile(path) and os.path.getsize(path) > 1024:
+                break
+            time.sleep(0.05)
+        size = os.path.getsize(path) if os.path.isfile(path) else 0
+        err_tail = ""
+        if err_path and os.path.isfile(err_path):
+            try:
+                with open(err_path, "rb") as fh:
+                    err_tail = fh.read()[-700:].decode("utf-8", errors="replace").strip()
+            except Exception:
+                err_tail = ""
+        self._log_tui(f"stt_stop file path={path} duration_s={duration_s:.2f} size={size} err_tail={err_tail}")
+        if duration_s < 0.7 or not os.path.isfile(path) or size <= 1024:
+            return False, "Recording too short/empty. Tap Ctrl+R, speak, tap Ctrl+R again."
+        try:
+            self._log_tui(f"stt_transcribe_start path={path}")
+            text = self._stt_transcribe_file(path)
+        except urllib_error.HTTPError as exc:
+            return False, f"STT request failed: HTTP {exc.code}"
+        except Exception as exc:
+            return False, f"STT request failed: {exc}"
+        if not text.strip():
+            self._log_tui("stt_transcribe_empty")
+            return False, "Transcribed but got empty text."
+        self._log_tui(f"stt_transcribe_done chars={len(text)}")
+        self.call_from_thread(self._stt_inject_and_send, text)
+        return True, f"Transcribed + sent: {text[:80]}"
+
+    def _stt_inject_and_send(self, text: str) -> None:
+        input_box = self.query_one("#chat-input", TextArea)
+        input_box.load_text(text.strip())
+        asyncio.create_task(self.action_submit_prompt())
+
     def _break_follow(self):
         self.follow_output = False
         self._scroll_end_scheduled = False
@@ -657,6 +877,111 @@ class UnifiedTuiApp(App):
 
     def _should_autofollow(self) -> bool:
         return self.follow_output
+
+    def _session_mode_enabled(self) -> bool:
+        return bool(str(getattr(self.runtime.args, "session_base_url", "") or "").strip() and str(getattr(self.runtime.args, "session_id", "") or "").strip())
+
+    def _session_api_base(self) -> str:
+        return str(getattr(self.runtime.args, "session_base_url", "") or "").rstrip("/") + "/v1"
+
+    def _maybe_start_session_event_listener(self) -> None:
+        if not self._session_mode_enabled() or self._session_event_thread is not None:
+            return
+
+        def worker() -> None:
+            sid = str(getattr(self.runtime.args, "session_id", "") or "").strip()
+            url = f"{self._session_api_base()}/sessions/{sid}/events"
+            req = urllib_request.Request(url=url, method="GET")
+            try:
+                with urllib_request.urlopen(req, timeout=600) as resp:
+                    event_name = ""
+                    data_lines: list[str] = []
+                    for raw in resp:
+                        line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+                        if not line:
+                            if data_lines:
+                                payload = "\n".join(data_lines)
+                                self.call_from_thread(self._session_handle_event, event_name or "event", payload)
+                            event_name = ""
+                            data_lines = []
+                            continue
+                        if line.startswith("event:"):
+                            event_name = line.split(":", 1)[1].strip()
+                        elif line.startswith("data:"):
+                            data_lines.append(line.split(":", 1)[1].lstrip())
+            except Exception as exc:
+                self.call_from_thread(self.notify, f"Session SSE disconnected: {exc}", "warning")
+
+        self._session_event_thread = threading.Thread(target=worker, daemon=True)
+        self._session_event_thread.start()
+
+    def _session_handle_event(self, event_name: str, data_text: str) -> None:
+        try:
+            evt = json.loads(data_text)
+        except Exception:
+            return
+        turn_id = str(evt.get("turn_id") or "")
+        payload = evt.get("payload") if isinstance(evt.get("payload"), dict) else {}
+        etype = str(evt.get("type") or event_name)
+
+        if etype == "llm.delta":
+            delta = str(payload.get("text_delta") or "")
+            if not delta:
+                return
+            assistant = self._session_assistants.get(turn_id)
+            if assistant is None:
+                return
+            router = self._session_think_routers.setdefault(
+                turn_id,
+                ThinkRouter(assume_think=bool(getattr(self.runtime.args, "assume_think", False))),
+            )
+            answer_accum = self._session_answer_accum.get(turn_id, "")
+            for channel, text in router.feed(delta):
+                if channel == "think":
+                    assistant.append_think(text)
+                else:
+                    assistant.append_answer(text)
+                    answer_accum += text
+            self._session_answer_accum[turn_id] = answer_accum
+            if self._should_autofollow():
+                self._request_scroll_end()
+        elif etype == "llm.final":
+            text = str(payload.get("text") or "")
+            assistant = self._session_assistants.get(turn_id)
+            if assistant is not None:
+                router = self._session_think_routers.get(turn_id)
+                if router is not None:
+                    answer_accum = self._session_answer_accum.get(turn_id, "")
+                    for channel, chunk in router.flush():
+                        if channel == "think":
+                            assistant.append_think(chunk)
+                        else:
+                            assistant.append_answer(chunk)
+                            answer_accum += chunk
+                    self._session_answer_accum[turn_id] = answer_accum
+                # If no deltas were rendered, fall back to final text.
+                if not self._session_answer_accum.get(turn_id, "") and text:
+                    assistant.append_answer(text)
+                    self._session_answer_accum[turn_id] = text
+                assistant.thinking_panel.finish(ended_in_think=False)
+            final_answer = self._session_answer_accum.get(turn_id, "") or text
+            self._last_assistant_answer = final_answer
+            if final_answer:
+                self.messages.append({"role": "assistant", "content": final_answer})
+            if bool(getattr(self.runtime.args, "tts_enabled", False)) and final_answer.strip():
+                self._tts_autoplay_last_answer_async(final_answer)
+        elif etype == "turn.error":
+            msg = str(payload.get("message") or "session turn error")
+            assistant = self._session_assistants.get(turn_id)
+            if assistant is not None:
+                assistant.append_answer(f"\n[session error] {msg}")
+                assistant.thinking_panel.finish(ended_in_think=False)
+        elif etype == "turn.finished":
+            self.is_generating = False
+            if turn_id in self._session_assistants:
+                self._session_assistants.pop(turn_id, None)
+            self._session_think_routers.pop(turn_id, None)
+            self._session_answer_accum.pop(turn_id, None)
 
     async def action_submit_prompt(self):
         input_box = self.query_one("#chat-input", TextArea)
@@ -743,6 +1068,35 @@ class UnifiedTuiApp(App):
         self.transcript.refresh(layout=True)
         self._request_scroll_end()
         input_box.load_text("")
+
+        if self._session_mode_enabled():
+            sid = str(getattr(self.runtime.args, "session_id", "") or "").strip()
+            try:
+                body = json.dumps({"text": user_text, "source": "tui"}).encode("utf-8")
+                req = urllib_request.Request(
+                    url=f"{self._session_api_base()}/sessions/{sid}/input",
+                    data=body,
+                    headers={"content-type": "application/json"},
+                    method="POST",
+                )
+                with urllib_request.urlopen(req, timeout=30) as resp:
+                    result = json.loads(resp.read().decode("utf-8"))
+                session_turn_id = str(result.get("turn_id") or "")
+                if session_turn_id:
+                    self._session_assistants[session_turn_id] = assistant
+                    self._session_think_routers[session_turn_id] = ThinkRouter(
+                        assume_think=bool(getattr(self.runtime.args, "assume_think", False))
+                    )
+                    self._session_answer_accum[session_turn_id] = ""
+                else:
+                    self.is_generating = False
+                    assistant.append_answer("\n[session error] missing turn_id")
+                    assistant.thinking_panel.finish(ended_in_think=False)
+            except Exception as exc:
+                self.is_generating = False
+                assistant.append_answer(f"\n[session error] {exc}")
+                assistant.thinking_panel.finish(ended_in_think=False)
+            return
 
         thread = threading.Thread(target=self._run_generation, args=(turn_id, list(self.messages)), daemon=True)
         self.generation_thread = thread
@@ -846,6 +1200,7 @@ class UnifiedTuiApp(App):
             ShowTopic("args", "Parsed CLI args", "/show args", UnifiedTuiApp._show_args),
             ShowTopic("aliases", "Alias map for slash commands/topics", "/show aliases", UnifiedTuiApp._show_aliases),
             ShowTopic("tts", "TTS runtime settings and state", "/show tts", UnifiedTuiApp._show_tts),
+            ShowTopic("stt", "STT runtime settings and state", "/show stt", UnifiedTuiApp._show_stt),
         ]
         self.show_topics = {topic.name: topic for topic in topics}
         self.show_aliases = {
@@ -868,6 +1223,7 @@ class UnifiedTuiApp(App):
             "tools": "tools",
             "aliases": "aliases",
             "tts": "tts",
+            "stt": "stt",
             "logs": "logs",
             "request": "request",
         }
@@ -965,6 +1321,15 @@ class UnifiedTuiApp(App):
                 read_only=False,
             )
         )
+        self.registry.register(
+            SlashCommand(
+                name="stt",
+                summary="Configure and test OpenAI-compatible STT",
+                usage="/stt [on|off|base-url <url>|model <id>|language <code|auto>|transcribe <file>|record [seconds]|toggle]",
+                handler=UnifiedTuiApp._cmd_stt,
+                read_only=False,
+            )
+        )
         for alias_name in (
             "model",
             "config",
@@ -1034,7 +1399,7 @@ class UnifiedTuiApp(App):
                     "Prompt + Session",
                 ]
             )
-            lines.extend(_format_name_grid(["/system", "/prefix", "/image", "/file", "/tts"], cols=4, min_width=18))
+            lines.extend(_format_name_grid(["/system", "/prefix", "/image", "/file", "/tts", "/stt"], cols=4, min_width=18))
             lines.extend(
                 [
                     "",
@@ -1463,6 +1828,149 @@ class UnifiedTuiApp(App):
             return msg if ok else f"Replay failed: {msg}"
 
         return "Usage: /tts [on|off|voices|voice <id>|speed <n>|autoplay on|off|test [text]|replay]"
+
+    def _stt_output_dir(self) -> str:
+        root = os.path.join(os.path.expanduser("~"), "runs", "model-runner", "outputs", "stt")
+        os.makedirs(root, exist_ok=True)
+        return root
+
+    def _stt_transcribe_file(self, path: str) -> str:
+        args = self.runtime.args
+        base = str(getattr(args, "stt_base_url", "http://127.0.0.1:8891") or "").rstrip("/")
+        model = str(getattr(args, "stt_model", "whisper-1") or "whisper-1")
+        language = str(getattr(args, "stt_language", "auto") or "auto").strip().lower()
+        boundary = f"----modelrunner-{uuid.uuid4().hex}"
+
+        def _part(name: str, value: str) -> bytes:
+            return (
+                f"--{boundary}\r\n"
+                f"Content-Disposition: form-data; name=\"{name}\"\r\n\r\n"
+                f"{value}\r\n"
+            ).encode("utf-8")
+
+        mime, _ = mimetypes.guess_type(path)
+        if not mime:
+            mime = "application/octet-stream"
+        with open(path, "rb") as fh:
+            raw = fh.read()
+
+        body = bytearray()
+        body.extend(_part("model", model))
+        if language and language != "auto":
+            body.extend(_part("language", language))
+        body.extend(_part("response_format", "verbose_json"))
+        body.extend(
+            (
+                f"--{boundary}\r\n"
+                f"Content-Disposition: form-data; name=\"file\"; filename=\"{os.path.basename(path)}\"\r\n"
+                f"Content-Type: {mime}\r\n\r\n"
+            ).encode("utf-8")
+        )
+        body.extend(raw)
+        body.extend(b"\r\n")
+        body.extend(f"--{boundary}--\r\n".encode("utf-8"))
+
+        req = urllib_request.Request(
+            url=f"{base}/v1/audio/transcriptions",
+            data=bytes(body),
+            headers={"content-type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+        )
+        with urllib_request.urlopen(req, timeout=300) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        text = str(payload.get("text") or "").strip() if isinstance(payload, dict) else ""
+        self._last_stt_audio_path = path
+        self._last_stt_text = text
+        return text
+
+    def _stt_record_to_file(self, seconds: int = 6) -> tuple[bool, str]:
+        seconds = max(1, min(120, int(seconds)))
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        uniq = int(time.time() * 1000) % 1000
+        path = os.path.join(self._stt_output_dir(), f"stt-rec-{stamp}-{uniq:03d}.wav")
+        commands: list[list[str]] = []
+        if shutil.which("ffmpeg"):
+            commands.append(["ffmpeg", "-y", "-f", "pulse", "-i", "default", "-t", str(seconds), path])
+        if shutil.which("arecord"):
+            commands.append(["arecord", "-f", "S16_LE", "-r", "16000", "-c", "1", "-d", str(seconds), path])
+        if not commands:
+            return False, "No recorder found (ffmpeg or arecord)."
+        last_err = ""
+        for cmd in commands:
+            try:
+                proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+                if proc.returncode == 0 and os.path.isfile(path) and os.path.getsize(path) > 1024:
+                    self._last_stt_audio_path = path
+                    return True, path
+                last_err = (proc.stderr or "").strip() or f"exit={proc.returncode}"
+            except Exception as exc:
+                last_err = str(exc)
+        return False, f"Recording failed: {last_err or 'unknown error'}"
+
+    def _cmd_stt(self, argv: list[str]) -> str:
+        args = self.runtime.args
+        if not argv:
+            return self._show_stt([])
+        token = argv[0].strip().lower()
+        if token in {"on", "off"}:
+            args.stt_enabled = token == "on"
+            return f"stt_enabled: {bool(args.stt_enabled)}"
+        if token == "base-url":
+            if len(argv) < 2:
+                return "Usage: /stt base-url <url>"
+            args.stt_base_url = argv[1].strip().rstrip("/")
+            return f"stt_base_url: {args.stt_base_url}"
+        if token == "model":
+            if len(argv) < 2:
+                return "Usage: /stt model <id>"
+            args.stt_model = argv[1].strip()
+            return f"stt_model: {args.stt_model}"
+        if token == "language":
+            if len(argv) < 2:
+                return "Usage: /stt language <code|auto>"
+            args.stt_language = argv[1].strip().lower() or "auto"
+            return f"stt_language: {args.stt_language}"
+        if token == "toggle":
+            if self._stt_busy:
+                return "STT busy: finishing previous action."
+            if self._stt_recording:
+                self._stt_busy = True
+                try:
+                    ok, msg = self._stt_stop_recording_and_transcribe_send()
+                finally:
+                    self._stt_busy = False
+                return msg if ok else f"STT toggle failed: {msg}"
+            ok, msg = self._stt_start_recording()
+            return (f"Recording… run /stt toggle again to stop+send. ({msg})" if ok else msg)
+
+        if token == "record":
+            sec = 6
+            if len(argv) >= 2:
+                try:
+                    sec = int(argv[1])
+                except ValueError:
+                    return "Usage: /stt record [seconds]"
+            ok, msg = self._stt_record_to_file(sec)
+            if not ok:
+                return msg
+            return f"Recorded: {msg}"
+        if token == "transcribe":
+            if len(argv) < 2:
+                return "Usage: /stt transcribe <file>"
+            raw_path = " ".join(argv[1:]).strip()
+            path = resolve_path_maybe_relative(raw_path, config_path=self.runtime.args._config_path)
+            if not os.path.isfile(path):
+                return f"Not found: {path}"
+            try:
+                text = self._stt_transcribe_file(path)
+            except urllib_error.HTTPError as exc:
+                return f"STT request failed: HTTP {exc.code}"
+            except Exception as exc:
+                return f"STT request failed: {exc}"
+            if not text:
+                return "Transcribed, but empty text was returned."
+            return f"STT text:\n{text}"
+        return "Usage: /stt [on|off|base-url <url>|model <id>|language <code|auto>|transcribe <file>|record [seconds]|toggle]"
 
     def _cmd_clear(self, argv: list[str]) -> str:
         del argv
@@ -2432,6 +2940,31 @@ class UnifiedTuiApp(App):
             f"tts.last_audio_path: {data['last_audio_path'] or '(none)'}",
             "",
             "Commands: /tts voices | /tts voice <id> | /tts speed <n> | /tts on|off | /tts test [text] | /tts replay",
+        ]
+        return self._to_json_or_lines(data, lines)
+
+    def _show_stt(self, argv: list[str]) -> str:
+        del argv
+        args = self.runtime.args
+        data = {
+            "enabled": bool(getattr(args, "stt_enabled", False)),
+            "base_url": str(getattr(args, "stt_base_url", "http://127.0.0.1:8891") or ""),
+            "model": str(getattr(args, "stt_model", "whisper-1") or "whisper-1"),
+            "language": str(getattr(args, "stt_language", "auto") or "auto"),
+            "last_backend": self._stt_last_backend or "",
+            "last_audio_path": self._last_stt_audio_path or "",
+            "last_text": self._last_stt_text or "",
+        }
+        lines = [
+            f"stt.enabled: {data['enabled']}",
+            f"stt.base_url: {data['base_url']}",
+            f"stt.model: {data['model']}",
+            f"stt.language: {data['language']}",
+            f"stt.last_backend: {data['last_backend'] or '(none)'}",
+            f"stt.last_audio_path: {data['last_audio_path'] or '(none)'}",
+            f"stt.last_text: {data['last_text'] or '(none)'}",
+            "",
+            "Commands: /stt on|off | /stt base-url <url> | /stt model <id> | /stt language <code|auto> | /stt record [seconds] | /stt transcribe <file> | /stt toggle",
         ]
         return self._to_json_or_lines(data, lines)
 
