@@ -185,6 +185,10 @@ def _known_attach_selector(raw: str) -> str | None:
     prefixed = f"attach:{value}"
     if _resolve_attachable_backend(prefixed) is not None:
         return prefixed
+    if value.startswith("sess_"):
+        session_prefixed = f"attach:session-{value}"
+        if _resolve_attachable_backend(session_prefixed) is not None:
+            return session_prefixed
     return None
 
 
@@ -925,6 +929,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tts-model", default="kokoro")
     parser.add_argument("--tts-voice", default="af_heart")
     parser.add_argument("--tts-speed", type=float, default=1.0)
+    parser.add_argument("--tts-profile", default="", help="Optional TTS profile name.")
 
     stt_enabled_group = parser.add_mutually_exclusive_group()
     stt_enabled_group.add_argument("--stt-enabled", dest="stt_enabled", action="store_true")
@@ -1418,6 +1423,27 @@ def parse_args() -> argparse.Namespace:
     pre.add_argument("--profile", default="")
     pre.add_argument("--session-base-url", default="")
     pre.add_argument("--session-id", default="")
+
+    # Register all option strings from the main parser so parse_known_args
+    # correctly identifies optional arguments and their values.
+    dummy_parser = build_parser()
+    for action in dummy_parser._actions:
+        if action.option_strings:
+            if not any(opt in pre._option_string_actions for opt in action.option_strings):
+                takes_arg = True
+                if isinstance(action, (argparse._StoreTrueAction, argparse._StoreFalseAction, argparse._HelpAction, getattr(argparse, "_CountAction", None) or type(None))):
+                    takes_arg = False
+                
+                kwargs = {}
+                if not takes_arg:
+                    kwargs["action"] = "store_true"
+                else:
+                    kwargs["nargs"] = action.nargs if action.nargs is not None else 1
+                try:
+                    pre.add_argument(*action.option_strings, **kwargs)
+                except argparse.ArgumentError:
+                    pass
+
     pre_args, _ = pre.parse_known_args(raw_argv)
 
     if (
@@ -1483,6 +1509,16 @@ def parse_args() -> argparse.Namespace:
     args._config_layers = list(config_meta.get("loaded", []) or ([] if not config_path else [config_path]))
     args._config_origins = dict(config_meta.get("origins", {}) or {})
     args.display_name = str(config_data.get("display_name", "") or "") if isinstance(config_data, dict) else ""
+
+    # Load system file content early so it is available even for early-return paths (like attach or session mode)
+    if not args.system and args.system_file:
+        try:
+            path = _resolve_path_maybe_relative(args.system_file, config_path=config_path)
+            with open(path, "r", encoding="utf-8") as fh:
+                args.system = fh.read().strip()
+        except Exception as exc:
+            print(f"Failed to read system file '{args.system_file}': {exc}")
+            sys.exit(1)
     early_backend = detect_backend(args.model_id, args.backend or config_backend)
     if early_backend == "openai" and not pre_args.model_id:
         # Attach mode should not inherit a local model path from config defaults.
@@ -1570,15 +1606,6 @@ def parse_args() -> argparse.Namespace:
         args._config_origins["model_id"] = "cli(positional)"
     for key in cli_overrides:
         args._config_origins[key] = "cli"
-
-    if not args.system and args.system_file:
-        try:
-            path = _resolve_path_maybe_relative(args.system_file, config_path=config_path)
-            with open(path, "r", encoding="utf-8") as fh:
-                args.system = fh.read().strip()
-        except Exception as exc:
-            print(f"Failed to read system file '{args.system_file}': {exc}")
-            sys.exit(1)
 
     _warn_ignored_flags(parser, args, args.backend)
     return args

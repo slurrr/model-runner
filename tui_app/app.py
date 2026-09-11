@@ -532,6 +532,13 @@ class UnifiedTuiApp(App):
         self._session_assistants: dict[str, AssistantMessage] = {}
         self._session_think_routers: dict[str, ThinkRouter] = {}
         self._session_answer_accum: dict[str, str] = {}
+
+        # TTS Queue and streaming variables
+        self._tts_queue: queue.Queue = queue.Queue()
+        self._tts_current_process: subprocess.Popen | None = None
+        self._tts_stream_buffer: str = ""
+        self._tts_streamed_any: bool = False
+        self._tts_worker_thread: threading.Thread | None = None
         self._stt_recording: bool = False
         self._stt_record_proc: subprocess.Popen | None = None
         self._stt_record_path: str = ""
@@ -567,8 +574,15 @@ class UnifiedTuiApp(App):
         # Keep typing flow immediate: start with the input focused.
         self.query_one("#chat-input", TextArea).focus()
         self._maybe_start_session_event_listener()
+        
+        # Start TTS Queue Worker
+        self._tts_worker_thread = threading.Thread(target=self._tts_queue_worker, daemon=True)
+        self._tts_worker_thread.start()
 
     def on_unmount(self):
+        # Stop TTS Queue Worker
+        if self._tts_queue is not None:
+            self._tts_queue.put(None)
         telemetry = self.runtime.telemetry
         if telemetry is not None and telemetry.enabled and not self._telemetry_finished:
             telemetry.publish_session_finished(status=self._telemetry_status)
@@ -621,6 +635,9 @@ class UnifiedTuiApp(App):
         self.exit()
 
     def action_interrupt_or_quit_hint(self):
+        # Stop any active TTS playback or queue
+        self._tts_cancel()
+
         if not self.is_generating:
             self.notify("Use Ctrl+Q to quit.", severity="warning")
             return
@@ -942,6 +959,7 @@ class UnifiedTuiApp(App):
                 else:
                     assistant.append_answer(text)
                     answer_accum += text
+                    self._tts_stream_append(text)
             self._session_answer_accum[turn_id] = answer_accum
             if self._should_autofollow():
                 self._request_scroll_end()
@@ -963,6 +981,8 @@ class UnifiedTuiApp(App):
                 if not self._session_answer_accum.get(turn_id, "") and text:
                     assistant.append_answer(text)
                     self._session_answer_accum[turn_id] = text
+                    self._tts_stream_append(text)
+                self._tts_stream_flush()
                 assistant.thinking_panel.finish(ended_in_think=False)
             final_answer = self._session_answer_accum.get(turn_id, "") or text
             self._last_assistant_answer = final_answer
@@ -1064,6 +1084,10 @@ class UnifiedTuiApp(App):
         self._pending_turn_started_at = None
         self._pending_turn_first_token_at = None
 
+        # Reset TTS stream state for the new turn
+        self._tts_stream_buffer = ""
+        self._tts_streamed_any = False
+
         self.follow_output = True
         self.transcript.refresh(layout=True)
         self._request_scroll_end()
@@ -1072,7 +1096,24 @@ class UnifiedTuiApp(App):
         if self._session_mode_enabled():
             sid = str(getattr(self.runtime.args, "session_id", "") or "").strip()
             try:
-                body = json.dumps({"text": user_text, "source": "tui"}).encode("utf-8")
+                payload = {"text": user_text, "source": "tui"}
+                system_text = str(getattr(self.runtime.args, "system", "") or "").strip()
+                if system_text:
+                    payload["overlays"] = [
+                        {
+                            "overlay_contract_version": "v1",
+                            "overlay_id": "tui.system_prompt.user_override",
+                            "overlay_instance_id": "tui.system_prompt.user_override",
+                            "type": "system_prompt_replace",
+                            "source": "tui_cli",
+                            "scope": "turn",
+                            "order": 0,
+                            "content": system_text,
+                            "content_type": "text/plain",
+                            "retention": "hash_only",
+                        }
+                    ]
+                body = json.dumps(payload).encode("utf-8")
                 req = urllib_request.Request(
                     url=f"{self._session_api_base()}/sessions/{sid}/input",
                     data=body,
@@ -1702,16 +1743,25 @@ class UnifiedTuiApp(App):
                 return [v for v in out if v.strip()]
         return []
 
-    def _tts_synthesize_to_file(self, text: str, *, voice: str, speed: float) -> str:
+    def _tts_synthesize_to_file(self, text: str, *, voice: str, speed: float, profile: str | None = None) -> str:
         base = str(getattr(self.runtime.args, "tts_base_url", "http://127.0.0.1:8880") or "").rstrip("/")
         model = str(getattr(self.runtime.args, "tts_model", "kokoro") or "kokoro")
         payload = {
             "model": model,
             "input": text,
-            "voice": voice,
             "response_format": "wav",
-            "speed": float(speed),
         }
+        if profile:
+            payload["profile"] = profile
+            cli_overrides = getattr(self.runtime.args, "_cli_overrides", set()) or set()
+            if "tts_voice" in cli_overrides:
+                payload["voice"] = voice
+            if "tts_speed" in cli_overrides:
+                payload["speed"] = speed
+        else:
+            payload["voice"] = voice
+            payload["speed"] = speed
+
         body = json.dumps(payload).encode("utf-8")
         req = urllib_request.Request(
             url=f"{base}/v1/audio/speech",
@@ -1729,6 +1779,12 @@ class UnifiedTuiApp(App):
         return dest
 
     def _tts_play_file(self, path: str) -> tuple[bool, str]:
+        ok, proc = self._tts_play_file_and_wait(path)
+        if ok and proc is not None:
+            return True, "Playing (asynchronous/queued)"
+        return False, "Could not launch local audio player."
+
+    def _tts_play_file_and_wait(self, path: str) -> tuple[bool, subprocess.Popen | None]:
         candidates: list[list[str]] = []
         if shutil.which("ffplay"):
             candidates.append(["ffplay", "-nodisp", "-autoexit", "-loglevel", "error", path])
@@ -1737,14 +1793,14 @@ class UnifiedTuiApp(App):
         if shutil.which("aplay"):
             candidates.append(["aplay", path])
         if not candidates:
-            return False, "No audio player found (ffplay/paplay/aplay)."
+            return False, None
         for cmd in candidates:
             try:
-                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return True, f"Playing via {cmd[0]}"
+                proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return True, proc
             except Exception:
                 continue
-        return False, "Could not launch local audio player."
+        return False, None
 
     def _tts_speak_text(self, text: str, *, autoplay: bool = True) -> tuple[bool, str]:
         text = (text or "").strip()
@@ -1752,24 +1808,123 @@ class UnifiedTuiApp(App):
             return False, "No text to speak."
         voice = str(getattr(self.runtime.args, "tts_voice", "af_heart") or "af_heart")
         speed = float(getattr(self.runtime.args, "tts_speed", 1.0) or 1.0)
+        profile = str(getattr(self.runtime.args, "tts_profile", "") or "").strip()
         try:
-            wav_path = self._tts_synthesize_to_file(text, voice=voice, speed=speed)
+            if not autoplay:
+                wav_path = self._tts_synthesize_to_file(text, voice=voice, speed=speed, profile=profile)
+                return True, f"Generated: {wav_path}"
+            else:
+                self._tts_queue_sentence(text)
+                return True, "Queued for TTS playback."
         except urllib_error.HTTPError as exc:
             return False, f"TTS request failed: HTTP {exc.code}"
         except Exception as exc:
             return False, f"TTS request failed: {exc}"
-        if not autoplay:
-            return True, f"Generated: {wav_path}"
-        ok, msg = self._tts_play_file(wav_path)
-        if ok:
-            return True, f"{msg} | {wav_path}"
-        return True, f"Generated but not playing: {wav_path} ({msg})"
 
     def _tts_autoplay_last_answer_async(self, text: str) -> None:
+        if self._tts_streamed_any:
+            return
         def worker() -> None:
             self._tts_speak_text(text, autoplay=bool(getattr(self.runtime.args, "tts_autoplay", True)))
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _tts_queue_sentence(self, text: str) -> None:
+        voice = str(getattr(self.runtime.args, "tts_voice", "af_heart") or "af_heart")
+        speed = float(getattr(self.runtime.args, "tts_speed", 1.0) or 1.0)
+        profile = str(getattr(self.runtime.args, "tts_profile", "") or "").strip()
+        self._tts_queue.put((text, voice, speed, profile))
+
+    def _tts_stream_append(self, text: str) -> None:
+        if not bool(getattr(self.runtime.args, "tts_enabled", False)) or not bool(getattr(self.runtime.args, "tts_autoplay", True)):
+            return
+        self._tts_stream_buffer += text
+        
+        sentences = []
+        buffer = self._tts_stream_buffer
+        pattern = re.compile(r'([^.!?\n]+[.!?]+(?=\s|$))|([^.!?\n]+\n+)')
+        matches = list(pattern.finditer(buffer))
+        if matches:
+            last_end = 0
+            for m in matches:
+                sentence = m.group(0).strip()
+                if sentence:
+                    sentences.append(sentence)
+                last_end = m.end()
+            self._tts_stream_buffer = buffer[last_end:]
+            
+        for sentence in sentences:
+            self._tts_streamed_any = True
+            self._tts_queue_sentence(sentence)
+
+    def _tts_stream_flush(self) -> None:
+        remaining = self._tts_stream_buffer.strip()
+        self._tts_stream_buffer = ""
+        if remaining:
+            self._tts_streamed_any = True
+            self._tts_queue_sentence(remaining)
+
+    def _tts_cancel(self) -> None:
+        while not self._tts_queue.empty():
+            try:
+                self._tts_queue.get_nowait()
+                self._tts_queue.task_done()
+            except queue.Empty:
+                break
+        
+        if self._tts_current_process is not None:
+            try:
+                self._tts_current_process.terminate()
+                self._tts_current_process.wait(timeout=0.5)
+            except Exception:
+                try:
+                    self._tts_current_process.kill()
+                except Exception:
+                    pass
+            self._tts_current_process = None
+        
+        self._tts_stream_buffer = ""
+        self._tts_streamed_any = False
+
+    def _tts_queue_worker(self) -> None:
+        while True:
+            try:
+                item = self._tts_queue.get()
+                if item is None:
+                    break
+                
+                if not getattr(self.runtime.args, "tts_enabled", False):
+                    self._tts_queue.task_done()
+                    continue
+
+                text, voice, speed, profile = item
+                
+                try:
+                    wav_path = self._tts_synthesize_to_file(text, voice=voice, speed=speed, profile=profile)
+                except Exception as exc:
+                    try:
+                        self._log_tui(f"TTS synthesis failed for chunk: {text[:30]}... error: {exc}")
+                    except Exception:
+                        pass
+                    self._tts_queue.task_done()
+                    continue
+                
+                if not getattr(self.runtime.args, "tts_enabled", False):
+                    self._tts_queue.task_done()
+                    continue
+
+                ok, proc = self._tts_play_file_and_wait(wav_path)
+                if proc is not None:
+                    self._tts_current_process = proc
+                    proc.wait()
+                    self._tts_current_process = None
+                
+                self._tts_queue.task_done()
+            except Exception as exc:
+                try:
+                    self._log_tui(f"TTS queue worker encountered error: {exc}")
+                except Exception:
+                    pass
 
     def _cmd_tts(self, argv: list[str]) -> str:
         args = self.runtime.args
@@ -1805,6 +1960,37 @@ class UnifiedTuiApp(App):
             args.tts_speed = speed
             return f"tts_speed: {args.tts_speed:.2f}"
 
+        if token == "profile":
+            if len(argv) < 2:
+                args.tts_profile = ""
+                return "Cleared TTS profile. Will use default voice and speed."
+            profile_name = argv[1].strip()
+            try:
+                base = str(getattr(self.runtime.args, "tts_base_url", "http://127.0.0.1:8880") or "").rstrip("/")
+                req = urllib_request.Request(url=f"{base}/v1/audio/profiles", method="GET")
+                with urllib_request.urlopen(req, timeout=5) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+                profiles = payload.get("profiles", {}) if isinstance(payload, dict) else {}
+                if profile_name not in profiles:
+                    args.tts_profile = profile_name
+                    if not hasattr(args, "_cli_overrides"):
+                        args._cli_overrides = set()
+                    args._cli_overrides.discard("tts_voice")
+                    args._cli_overrides.discard("tts_speed")
+                    return f"Warning: TTS profile '{profile_name}' is not registered on the backend.\nSetting anyway (backend will handle fallback)."
+            except Exception:
+                pass
+            args.tts_profile = profile_name
+            if not hasattr(args, "_cli_overrides"):
+                args._cli_overrides = set()
+            args._cli_overrides.discard("tts_voice")
+            args._cli_overrides.discard("tts_speed")
+            return f"tts_profile: {args.tts_profile}"
+
+        if token in {"cancel", "stop"}:
+            self._tts_cancel()
+            return "TTS playback and queue canceled."
+
         if token == "voices":
             try:
                 voices = self._tts_fetch_voices()
@@ -1827,7 +2013,7 @@ class UnifiedTuiApp(App):
             ok, msg = self._tts_speak_text(self._last_assistant_answer, autoplay=bool(getattr(args, "tts_autoplay", True)))
             return msg if ok else f"Replay failed: {msg}"
 
-        return "Usage: /tts [on|off|voices|voice <id>|speed <n>|autoplay on|off|test [text]|replay]"
+        return "Usage: /tts [on|off|voices|voice <id>|speed <n>|profile [name]|cancel|autoplay on|off|test [text]|replay]"
 
     def _stt_output_dir(self) -> str:
         root = os.path.join(os.path.expanduser("~"), "runs", "model-runner", "outputs", "stt")
@@ -2928,6 +3114,7 @@ class UnifiedTuiApp(App):
             "model": str(getattr(args, "tts_model", "kokoro") or "kokoro"),
             "voice": str(getattr(args, "tts_voice", "af_heart") or "af_heart"),
             "speed": float(getattr(args, "tts_speed", 1.0) or 1.0),
+            "profile": str(getattr(args, "tts_profile", "") or ""),
             "last_audio_path": self._last_tts_audio_path or "",
         }
         lines = [
@@ -2937,9 +3124,10 @@ class UnifiedTuiApp(App):
             f"tts.model: {data['model']}",
             f"tts.voice: {data['voice']}",
             f"tts.speed: {data['speed']:.2f}",
+            f"tts.profile: {data['profile'] or '(none)'}",
             f"tts.last_audio_path: {data['last_audio_path'] or '(none)'}",
             "",
-            "Commands: /tts voices | /tts voice <id> | /tts speed <n> | /tts on|off | /tts test [text] | /tts replay",
+            "Commands: /tts voices | /tts voice <id> | /tts speed <n> | /tts profile [name] | /tts on|off | /tts test [text] | /tts replay",
         ]
         return self._to_json_or_lines(data, lines)
 
@@ -3136,6 +3324,7 @@ class UnifiedTuiApp(App):
                     self._request_scroll_end()
             elif isinstance(ev, AnswerDelta):
                 self.pending_assistant.append_answer(ev.text)
+                self._tts_stream_append(ev.text)
                 if self._should_autofollow():
                     self._request_scroll_end()
             elif isinstance(ev, Error):
@@ -3148,6 +3337,7 @@ class UnifiedTuiApp(App):
                 if telemetry is not None and telemetry.enabled:
                     telemetry.publish_error(scope="turn", message=ev.message)
             elif isinstance(ev, Finish):
+                self._tts_stream_flush()
                 record = ev.record
                 timing = record.timing if isinstance(record.timing, dict) else {}
                 if "time_to_first_token" not in timing and self._pending_turn_first_token_at is not None:
