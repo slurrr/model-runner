@@ -106,6 +106,13 @@ Policy application:
 ### vLLM (managed) + OpenAI (attach)
 Primary path for MVP.
 
+Server requirements (vLLM-specific):
+- vLLM defaults `tool_choice="auto"` when `tools` are present. For vLLM tool calling to function, the server MUST be started with:
+  - `--enable-auto-tool-choice`
+  - `--tool-call-parser <parser>`
+- Valid parsers are vLLM-version dependent. Discover via:
+  - `vllm serve --help=Frontend` (then search for `--tool-call-parser`)
+
 Request:
 - Send `tools=[...]` in the OpenAI Chat Completions payload when tools are enabled.
 - `tool_choice` remains out of scope for MVP (defaults to auto).

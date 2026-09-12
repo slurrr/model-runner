@@ -1,0 +1,33 @@
+[model]
+id = "Qwen3.5-9B"
+
+[gen]
+stream = true
+
+[prompt]
+
+
+[ui]
+show_thinking = false
+assume_think = false
+history_strip_think = true
+no_animate_thinking = false
+save_transcript = ""
+capture_last_request = false
+show_tool_activity = false
+show_tool_arguments = false
+scroll_lines = 9
+ui_tick_ms = 33
+ui_max_events_per_tick = 120
+
+[telemetry]
+jsonl = ""
+sample_interval_s = 1.0
+
+[tools]
+
+[backend.openai]
+base_url = "http://127.0.0.1:8002/v1"
+api_key = ""
+timeout_s = 600
+log_file = ""

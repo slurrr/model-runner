@@ -21,6 +21,8 @@ This folder stores short decision records (ADRs) for choices made while evolving
 | 0013 | Keep `openai` backend name; add “targets” for multiple servers | Name backends by protocol contract; add `config/targets/openai/` for endpoints/auth. |
 | 0014 | Add `/status`; make `/show` the primary inspector | Provide concise status + verbose inspection; keep old shortcuts as hidden aliases. |
 | 0015 | Token accounting and metrics | Prefer backend-native usage/token IDs; fall back to backend tokenization; avoid char-as-token substitutions. |
+| 0016 | Keep telemetry in this repo and build the dashboard separately | Scope this repo to telemetry/schema/export and keep the browser dashboard in a separate repo. |
+| 0017 | Canonical telemetry schema with dual export surfaces | Use a repo-owned telemetry model and derive both JSON app exports and Prometheus metrics from it. |
 
 ## Format
 

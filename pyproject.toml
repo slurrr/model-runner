@@ -7,11 +7,50 @@ name = "model-runner"
 version = "0.0.0"
 description = "Lightweight local model runner scripts (HF, GGUF, Ollama) with a unified Textual TUI."
 readme = "README.md"
-requires-python = ">=3.10"
-dependencies = []
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch==2.10.0+cu130",
+    "torchaudio==2.10.0+cu130",
+    "torchvision==0.25.0+cu130",
+    "jinja2>=3.1,<4",
+    "huggingface_hub==1.7.2",
+    "pynvml>=13,<14",
+    "rich>=14,<15",
+    "textual>=6,<9",
+    "transformers==5.5.3",
+    "vllm==0.19.0",
+]
 
 [project.scripts]
+model-runner = "tui:main"
 tui = "tui:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+]
+gguf = [
+    "llama-cpp-python>=0.3.16,<0.4",
+]
+exl2 = [
+    "exllamav2>=0.3.2,<0.4",
+]
+
+[tool.uv]
+environments = ["sys_platform == 'linux'"]
+override-dependencies = [
+    "transformers==5.5.3",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchaudio = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
 
 [tool.setuptools]
 py-modules = ["tui", "config_utils"]

@@ -23,8 +23,14 @@ save_transcript = ""
 capture_last_request = false
 scroll_lines = 1
 show_thinking = false
+show_tool_activity = false
+show_tool_arguments = false
 ui_max_events_per_tick = 120
 ui_tick_ms = 33
+
+[telemetry]
+jsonl = ""
+sample_interval_s = 1.0
 
 [tools]
 enabled = false
